@@ -21,7 +21,7 @@ typedef unsigned long long uint64_t;
 uint64_t READSIZE = 10LL * 1024 * 1024 * 1024;
 
 // the path of file
-const char *FILEPATH = "D:\\CUDA\\SHA256\\.gitignore\\1_118M.pdf";
+const char *FILEPATH = "D:\\CUDA\\SHA256\\1_118M.pdf";
 
 // the size of a data block
 uint64_t DATABLOCKSIZE[2] = {1024llu, 0LLU};
