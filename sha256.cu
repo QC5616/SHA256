@@ -154,6 +154,16 @@ int main(int agrc, char *argv[]) {
             preprocess(readCharacters, &dataBlockAmountPerReading, &storageSizePerReading);
         }
 
+        // set up block and gird dimension
+        uint64_t blockDimension_x = 32;
+        uint64_t gridDimension_x = 1;
+        if (dataBlockAmountPerReading > blockDimension_x) {
+            gridDimension_x = dataBlockAmountPerReading / blockDimension_x;
+            if (dataBlockAmountPerReading % blockDimension_x > 0) gridDimension_x++;
+        }
+        dim3 block1(blockDimension_x);
+        dim3 grid1(gridDimension_x);
+
         // 1. read characters from input data stream and transfer data from host to device
         C = (char *) malloc(readCharacters);
         cudaMalloc((char **)&D_C, readCharacters);
@@ -163,42 +173,24 @@ int main(int agrc, char *argv[]) {
 
         // 2. padding characters
         CHECK(cudaMalloc((unsigned char **)&D_P, storageSizePerReading));
-        uint64_t blockDimension_x = 32;
-        uint64_t gridDimension_x = 1;
-        if (dataBlockAmountPerReading > blockDimension_x) {
-            gridDimension_x = dataBlockAmountPerReading / blockDimension_x;
-            if (dataBlockAmountPerReading % blockDimension_x > 0) gridDimension_x++;
-        }
-
-        // printf("dataBolckAmount = %llu\n", dataBlockAmountPerReading);
-        // printf("blockDimension_x = %llu, gridDimension_x = %llu\n", blockDimension_x, gridDimension_x);
-
-        dim3 block1(blockDimension_x);
-        dim3 grid1(gridDimension_x);
         paddingChar<<<grid1, block1>>>((unsigned char *)D_C, D_P, DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], dataBlockAmountPerReading);
         cudaDeviceSynchronize();
         cudaFree(D_C);
         
         // 3. transform 4 unsigned char to 1 32-bit unsigned int
         CHECK(cudaMalloc((uint32_t **)&D_T, storageSizePerReading));
-        dim3 block2(blockDimension_x);
-        dim3 grid2(gridDimension_x);
-        unsignedCharToUnsignedInt<<<grid2, block2>>>(D_P, D_T, DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], dataBlockAmountPerReading);
+        unsignedCharToUnsignedInt<<<grid1, block1>>>(D_P, D_T, DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], dataBlockAmountPerReading);
         cudaDeviceSynchronize();
         cudaFree(D_P);
 
         // 4. extending 16 32-bit integers to 64 32-bit integers
         CHECK(cudaMalloc((uint32_t **)&D_E, 4 * storageSizePerReading));
-        dim3 block3(blockDimension_x);
-        dim3 grid3(gridDimension_x);
-        extending<<<grid3, block3>>>(D_T, D_E, DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], dataBlockAmountPerReading);
+        extending<<<grid1, block1>>>(D_T, D_E, DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], dataBlockAmountPerReading);
         cudaDeviceSynchronize();
         cudaFree(D_T);
     
         // 5.updating hash value
-        dim3 block4(blockDimension_x);
-        dim3 grid4(gridDimension_x);
-        updatingHashValue<<<grid4, block4>>>(D_E, D_V[0], DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], (oddDataBlockAmount && (i == readTimes - 1)), dataBlockAmountPerReading, hashValuePosition, 0LLU);
+        updatingHashValue<<<grid1, block1>>>(D_E, D_V[0], DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], (oddDataBlockAmount && (i == readTimes - 1)), dataBlockAmountPerReading, hashValuePosition, 0LLU);
         cudaDeviceSynchronize();
         cudaFree(D_E);
         hashValuePosition += (dataBlockAmountPerReading * 8);
@@ -226,6 +218,16 @@ int main(int agrc, char *argv[]) {
         hashValueAmount = dataBlockAmount;
         if (oddDataBlockAmount && l != layers - 1) hashValueAmount++;
         hashValueAmountArray[l] = hashValueAmount;
+
+        // set up block and grid dimension
+        uint64_t blockDimension_x = 32;
+        uint64_t gridDimension_x = 1;
+        if (dataBlockAmount > blockDimension_x) {
+            gridDimension_x = dataBlockAmount / blockDimension_x;
+            if (dataBlockAmount % blockDimension_x > 0) gridDimension_x++;
+        }
+        dim3 block1(blockDimension_x);
+        dim3 grid1(gridDimension_x);
         
         // 1. get data from the previous hash value
         cudaMalloc((char **)&D_C, hashValueAmountArray[l - 1] * 8 * sizeof(uint32_t));
@@ -233,46 +235,25 @@ int main(int agrc, char *argv[]) {
 
         // 2. padding characters
         CHECK(cudaMalloc((char **)&D_P, storageSize));
-        uint64_t blockDimension_x = 32;
-        uint64_t gridDimension_x = 1;
-        if (dataBlockAmount > blockDimension_x) {
-            gridDimension_x = dataBlockAmount / blockDimension_x;
-            if (dataBlockAmount % blockDimension_x > 0) gridDimension_x++;
-        } else {
-            // blockDimension_x = dataBlockAmount;
-        }
-        dim3 block1(blockDimension_x);
-        dim3 grid1(gridDimension_x);
-
-        // printf("\n\n************layer = %llu\n", l);
-        // printf("dataBolckAmount = %llu\n", dataBlockAmount);
-        // printf("blockDimension_x = %llu, gridDimension_x = %llu\n", blockDimension_x, gridDimension_x);
-
         paddingChar<<<grid1, block1>>>((unsigned char *)D_C, D_P, DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], dataBlockAmount);
         cudaDeviceSynchronize();
         cudaFree(D_C);
 
         // 3. transform 4 unsigned char to 1 32-bit unsigned int
         CHECK(cudaMalloc((char **)&D_T, storageSize));
-        dim3 block2(blockDimension_x);
-        dim3 grid2(gridDimension_x);
-        unsignedCharToUnsignedInt<<<grid2, block2>>>(D_P, D_T, DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], dataBlockAmount);
+        unsignedCharToUnsignedInt<<<grid1, block1>>>(D_P, D_T, DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], dataBlockAmount);
         cudaDeviceSynchronize();
         cudaFree(D_P);
 
         // 4. extending 16 32-bit integers to 64 32-bit integers
         CHECK(cudaMalloc((char **)&D_E, 4 * storageSize));
-        dim3 block3(blockDimension_x);
-        dim3 grid3(gridDimension_x);
-        extending<<<grid3, block3>>>(D_T, D_E, DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], dataBlockAmount);
+        extending<<<grid1, block1>>>(D_T, D_E, DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], dataBlockAmount);
         cudaDeviceSynchronize();
         cudaFree(D_T);
 
         // 5.updating hash value 
         CHECK(cudaMalloc((uint32_t **)&D_V[l],  hashValueAmount* 8 * sizeof(uint32_t)));
-        dim3 block4(blockDimension_x);
-        dim3 grid4(gridDimension_x);
-        updatingHashValue<<<grid4, block4>>>(D_E, D_V[l], DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], oddDataBlockAmount, dataBlockAmount, 0llu, l);
+        updatingHashValue<<<grid1, block1>>>(D_E, D_V[l], DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], oddDataBlockAmount, dataBlockAmount, 0llu, l);
         cudaDeviceSynchronize();
         cudaFree(D_E);
     }
@@ -398,24 +379,6 @@ __global__ void paddingChar(unsigned char* D_C, unsigned char* D_P, uint64_t DAT
             D_P[x2 + dataBlockSize + paddingSize - i] = (unsigned char)((8 * dataBlockSize) >> (i-1)*8);
         }
     }
-    // if (idx == 0)
-    // {
-    //     printf("\nidx = %llu\n", idx);
-    //     printf("x1 = %llu x2 = %llu\n", x1, x2);
-    //     for (uint64_t i = 0; i < 128; i++)
-    //     {
-    //         printf("D_P[%llu] = %x\n", i, (uint32_t)D_P[i+x2]);
-    //     }
-    // }
-    // if (idx == dataBlockAmount - 1)
-    // {
-    //     printf("\nidx = %llu\n", idx);
-    //     printf("x1 = %llu x2 = %llu\n", x1, x2);
-    //     for (uint64_t i = 0; i < 128; i++)
-    //     {
-    //         printf("D_P[%llu] = %x\n", i, (uint32_t)D_P[i+x2]);
-    //     }
-    // }
 }
 
 // 3. transform 4 unsigned char to 32-bit unsiged int
@@ -463,33 +426,6 @@ __global__ void unsignedCharToUnsignedInt(const unsigned char* D_P, uint32_t* D_
             D_T[x2 + 15 + 16 * i] = (D_P[x1 + 60 + 64 * i] << 24) + (D_P[x1 + 61 + 64 * i] << 16) + (D_P[x1 + 62 + 64 * i] << 8) + D_P[x1 + 63 + 64 * i];
         }
     }
-    // if (idx == 0)
-    // {
-    //     printf("\nidx = %llu\n", idx);
-    //     printf("x1 = %llu x2 = %llu\n", x1, x2);
-    //     for (uint64_t i = 0; i < 32; i++)
-    //     {
-    //         printf("D_T[%llu] = %x\n", i, D_T[i+x2]);
-    //     }
-    // }
-    // if (idx == dataBlockAmount - 2)
-    // {
-    //     printf("\nidx = %llu\n", idx);
-    //     printf("x1 = %llu x2 = %llu\n", x1, x2);
-    //     for (uint64_t i = 0; i < 32; i++)
-    //     {
-    //         printf("D_T[%llu] = %x\n", i, D_T[i+x2]);
-    //     }
-    // }
-    // if (idx == dataBlockAmount - 1)
-    // {
-    //     printf("\nidx = %llu\n", idx);
-    //     printf("x1 = %llu x2 = %llu\n", x1, x2);
-    //     for (uint64_t i = 0; i < 32; i++)
-    //     {
-    //         printf("D_T[%llu] = %x\n", i, D_T[i+x2]);
-    //     }
-    // }
 }
 
 // 4. extending 16 32-bit integers to 64 32-bit integers
@@ -652,39 +588,6 @@ __global__ void updatingHashValue(const uint32_t *D_E, uint32_t *D_H, uint64_t D
             h8 = D_H[x2 + 7 + hashValuePosition];
         }
     }
-
-    // if (idx == 0)
-    // {
-    //     printf("\nidx = %llu\n", idx);
-    //     printf("x1 = %llu x2 = %llu\n", x1, x2);
-    //     for (uint64_t i = 0; i < 8; i++)
-    //     {
-    //         printf("idx = %llu, D_H[%llu] = %x\n", idx, i, D_H[i + hashValuePosition + x2]);
-    //     }
-    //     printf("idx = %llu,  %x %x %x %x %x %x %x %x\n", idx, h1,h2,h3,h4,h5,h6,h7,h8);
-        
-    // }
-    // if (idx == dataBlockAmount - 2)
-    // {
-    //     printf("\nidx = %llu\n", idx);
-    //     printf("x1 = %llu x2 = %llu\n", x1, x2);
-    //     for (uint64_t i = 0; i < 8; i++)
-    //     {
-    //         printf("idx = %llu, D_H[%llu] = %x\n", idx, i, D_H[i + hashValuePosition + x2]);
-    //     }
-    //     printf("idx = %llu,  %x %x %x %x %x %x %x %x\n", idx, h1,h2,h3,h4,h5,h6,h7,h8);
-        
-    // }
-    // if (idx == dataBlockAmount - 1)
-    // {
-    //     printf("\nidx = %llu\n", idx);
-    //     printf("x1 = %llu x2 = %llu\n", x1, x2);
-    //     for (uint64_t i = 0; i < 8; i++)
-    //     {
-    //         printf("idx = %llu, D_H[%llu] = %x\n", idx, i, D_H[i + hashValuePosition + x2]);
-    //     }
-    //     printf("idx = %llu,  %x %x %x %x %x %x %x %x\n", idx, h1,h2,h3,h4,h5,h6,h7,h8);
-    // }
 
     // when the number of hash vaule amount is odd, copy the last-1 hash value
     if (oddDataBlockAmount && (idx == dataBlockAmount - 1)) {
