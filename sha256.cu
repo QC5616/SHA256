@@ -160,6 +160,8 @@ int main(int agrc, char *argv[]) {
         if (dataBlockAmountPerReading > blockDimension_x) {
             gridDimension_x = dataBlockAmountPerReading / blockDimension_x;
             if (dataBlockAmountPerReading % blockDimension_x > 0) gridDimension_x++;
+        } else {
+            blockDimension_x = dataBlockAmountPerReading;
         }
         dim3 block1(blockDimension_x);
         dim3 grid1(gridDimension_x);
@@ -225,6 +227,8 @@ int main(int agrc, char *argv[]) {
         if (dataBlockAmount > blockDimension_x) {
             gridDimension_x = dataBlockAmount / blockDimension_x;
             if (dataBlockAmount % blockDimension_x > 0) gridDimension_x++;
+        } else {
+            blockDimension_x = dataBlockAmount;
         }
         dim3 block1(blockDimension_x);
         dim3 grid1(gridDimension_x);
