@@ -57,7 +57,7 @@ int main(int agrc, char *argv[]) {
     // get the file size
     printf("have read file: %s\n", argv[1]);
     FILE *fin;
-    fin = fopen(FILEPATH, "rb");
+    fin = fopen(argv[1], "rb");
     if (!fin) {
         printf("reading file failed.\n");
         if (agrc == 1) printf("please enter file name.\n");
