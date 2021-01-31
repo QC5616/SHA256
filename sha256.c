@@ -244,7 +244,7 @@ int main(int agrc, char *argv[]) {
     }
 
     // show time consumption,
-    printf("time consumption: %f seconds\n\n", end - start);
+    printf("time consumption: %f s\n\n", end - start);
 
     return 0;
 }
