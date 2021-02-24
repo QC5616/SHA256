@@ -40,6 +40,11 @@ int main(int argc, char *argv[])
     printf("Please enter DataBlock size coefficient in KB: ");
     scanf("%llu", &coef);
     DATABLOCKSIZE[0] = coef * 1024;
+    if (DATABLOCKSIZE[0] > 600 * 1024 * 1024LLU) 
+    {
+        printf("The data block is too big!\n");
+        exit(EXIT_FAILURE);
+    }
 
     // set the start time
     double start, phase_1, end;

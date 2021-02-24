@@ -7,17 +7,17 @@
 typedef unsigned int uint32_t;
 typedef unsigned long long uint64_t;
 
-#define CHECK(call)                                                \
-    {                                                              \
-        const cudaError_t error = call;                            \
-        if (error != cudaSuccess)                                  \
-        {                                                          \
-            fprintf(stderr, "Error: %s:%d, ", __FILE__, __LINE__); \
-            fprintf(stderr, "code: %d, reason: %s\n", error,       \
-                    cudaGetErrorString(error));                    \
-            exit(1);                                               \
-        }                                                          \
-    }
+#define CHECK(call)                                            \
+{                                                              \
+    const cudaError_t error = call;                            \
+    if (error != cudaSuccess)                                  \
+    {                                                          \
+        fprintf(stderr, "Error: %s:%d, ", __FILE__, __LINE__); \
+        fprintf(stderr, "code: %d, reason: %s\n", error,       \
+                cudaGetErrorString(error));                    \
+        exit(1);                                               \
+    }                                                          \
+}
 
 // logic functions
 #define ROTL(W, n) (((W << n) & 0xFFFFFFFF) | (W) >> (32 - (n)))
@@ -62,7 +62,7 @@ __global__ void unsignedCharToUnsignedInt(const unsigned char *D_P, uint32_t *D_
 __global__ void extending(uint32_t *D_T, uint32_t *D_E, uint64_t DATABLOCKSIZE0, uint64_t DATABLOCKSIZE1, uint64_t PADDINGSIZE0, uint64_t PADDINGSIZE1, uint64_t dataBlockAmount);
 
 // 5. updating hash value
-__global__ void updatingHashValue(uint64_t l, const uint32_t *D_E, uint32_t *D_H, uint64_t DATABLOCKSIZE0, uint64_t DATABLOCKSIZE1, uint64_t PADDINGSIZE0, uint64_t PADDINGSIZE1, bool oddDataBlockAmount, uint64_t dataBlockAmount, uint64_t hashValuePosition, uint64_t layer);
+__global__ void updatingHashValue(const uint32_t *D_E, uint32_t *D_H, uint64_t DATABLOCKSIZE0, uint64_t DATABLOCKSIZE1, uint64_t PADDINGSIZE0, uint64_t PADDINGSIZE1, bool oddDataBlockAmount, uint64_t dataBlockAmount, uint64_t hashValuePosition, uint64_t layer);
 
 // 6. little end to big end
 __global__ void lend_to_bend(uint32_t *V, uint64_t h_a, uint64_t l);
@@ -82,6 +82,11 @@ int main(int agrc, char *argv[])
     printf("Please enter DataBlock size coefficient in KB: ");
     scanf("%llu", &coef);
     DATABLOCKSIZE[0] = coef * 1024;
+    if (DATABLOCKSIZE[0] > 600 * 1024 * 1024LLU) 
+    {
+        printf("The data block is too big!\n");
+        exit(EXIT_FAILURE);
+    }
 
     // set the start time
     double start, phase_1, end;
@@ -236,7 +241,7 @@ int main(int agrc, char *argv[])
         cudaFree(D_T);
 
         // 5.updating hash value
-        updatingHashValue<<<grid1, block1>>>(0, D_E, D_V[0], DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], (oddDataBlockAmount && (i == readTimes - 1)), dataBlockAmountPerReading, hashValuePosition, 0LLU);
+        updatingHashValue<<<grid1, block1>>>(D_E, D_V[0], DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], (oddDataBlockAmount && (i == readTimes - 1)), dataBlockAmountPerReading, hashValuePosition, 0LLU);
         cudaDeviceSynchronize();
         cudaFree(D_E);
         hashValuePosition += (dataBlockAmountPerReading * 8);
@@ -328,7 +333,7 @@ int main(int agrc, char *argv[])
 
         // 5.updating hash value
         CHECK(cudaMalloc((uint32_t **)&D_V[l], hashValueAmount * 8 * sizeof(uint32_t)));
-        updatingHashValue<<<grid1, block1>>>(l, D_E, D_V[l], DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], oddDataBlockAmount, dataBlockAmount, 0llu, l);
+        updatingHashValue<<<grid1, block1>>>(D_E, D_V[l], DATABLOCKSIZE[0], DATABLOCKSIZE[1], PADDINGSIZE[0], PADDINGSIZE[1], oddDataBlockAmount, dataBlockAmount, 0llu, l);
         cudaDeviceSynchronize();
         cudaFree(D_E);
 
@@ -640,7 +645,7 @@ __global__ void extending(uint32_t *D_T, uint32_t *D_E, uint64_t DATABLOCKSIZE0,
 }
 
 // 5. updating hash value
-__global__ void updatingHashValue(uint64_t l, const uint32_t *D_E, uint32_t *D_H, uint64_t DATABLOCKSIZE0, uint64_t DATABLOCKSIZE1, uint64_t PADDINGSIZE0, uint64_t PADDINGSIZE1, bool oddDataBlockAmount, uint64_t dataBlockAmount, uint64_t hashValuePosition, uint64_t layer)
+__global__ void updatingHashValue(const uint32_t *D_E, uint32_t *D_H, uint64_t DATABLOCKSIZE0, uint64_t DATABLOCKSIZE1, uint64_t PADDINGSIZE0, uint64_t PADDINGSIZE1, bool oddDataBlockAmount, uint64_t dataBlockAmount, uint64_t hashValuePosition, uint64_t layer)
 {
     // determining threadId
     uint64_t ix = blockIdx.x * blockDim.x + threadIdx.x;
