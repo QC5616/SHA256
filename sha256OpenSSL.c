@@ -32,10 +32,6 @@ int main(int argc, char *argv[])
     printf("\nComputing hash value on CPU_OpenSSL.\n");
 
     // determining data block size
-    // printf("Please enter DataBlock size in Bytes: ");
-    // scanf("%llu", &DATABLOCKSIZE[0]);
-
-    // determining data block size
     uint64_t coef = 0;
     printf("Please enter DataBlock size coefficient in KB: ");
     scanf("%llu", &coef);
@@ -67,14 +63,23 @@ int main(int argc, char *argv[])
     if (fileSize % READSIZE > 0)
         readTimes++;
 
-    // determine the data size
+    // determine the size of data block
     if (coef > 0)
     {
         DATABLOCKSIZE[0] = coef * 1024;
+        if (DATABLOCKSIZE[0] > READSIZE)
+        {
+            printf("data block is too big.");
+            exit(EXIT_FAILURE);
+        }
     }
     else
     {
-        DATABLOCKSIZE[0] = fileSize;
+        DATABLOCKSIZE[0] = READSIZE;
+    }
+    if (fileSize % DATABLOCKSIZE[0] > 0)
+    {
+        DATABLOCKSIZE[1] = fileSize % DATABLOCKSIZE[0];
     }
 
     // get the number of layers in the Merkle Hash Tree
@@ -92,30 +97,24 @@ int main(int argc, char *argv[])
 
     // computing hash value for 0 layer
 
-    // 1. determining the the size of data block
-    if (READSIZE % DATABLOCKSIZE[0] > 0)
-    {
-        DATABLOCKSIZE[1] = READSIZE % DATABLOCKSIZE[0];
-    }
-
-    // 3. get the number of data block
+    // 1. get the number of data block
     uint64_t dataBlockAmount = fileSize / DATABLOCKSIZE[0];
     if (fileSize % DATABLOCKSIZE[0] > 0)
         dataBlockAmount++;
 
-    // 4. determining the parity of data block amount
+    // 2. determining the parity of data block amount
     bool oddDataBlockAmount = false;
     if (dataBlockAmount % 2 != 0)
         oddDataBlockAmount = true;
 
-    // 5. get the number of hash value
+    // 3. get the number of hash value
     uint64_t hashValueAmount = dataBlockAmount;
     if (oddDataBlockAmount && layers > 1)
         hashValueAmount++;
     uint64_t hashValueAmountArray[layers];
     hashValueAmountArray[0] = hashValueAmount;
 
-    // pre-assign the size of block and the number of characters for padding
+    // 4. pre-assign the size of block and the number of characters for padding
     uint64_t dataBlockSize = DATABLOCKSIZE[0];
 
     // storing the data after padding

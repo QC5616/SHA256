@@ -86,14 +86,23 @@ int main(int argc, char *argv[])
     if (fileSize % READSIZE > 0)
         readTimes++;
 
-    // determine the data size
+    // determine the size of data block
     if (coef > 0)
     {
         DATABLOCKSIZE[0] = coef * 1024;
+        if (DATABLOCKSIZE[0] > READSIZE)
+        {
+            printf("data block is too big.");
+            exit(EXIT_FAILURE);
+        }
     }
     else
     {
-        DATABLOCKSIZE[0] = fileSize;
+        DATABLOCKSIZE[0] = READSIZE;
+    }
+    if (fileSize % DATABLOCKSIZE[0] > 0)
+    {
+        DATABLOCKSIZE[1] = fileSize % DATABLOCKSIZE[0];
     }
 
     // get the number of layers in the Merkle Hash Tree
@@ -111,13 +120,7 @@ int main(int argc, char *argv[])
 
     // computing hash value for 0 layer
 
-    // 1. determining the the size of data block
-    if (READSIZE % DATABLOCKSIZE[0] > 0)
-    {
-        DATABLOCKSIZE[1] = READSIZE % DATABLOCKSIZE[0];
-    }
-
-    // 2. get the number of characters for padding
+    // 1. get the number of characters for padding
     uint64_t PADDINGSIZE[2] = {0LLU, 0LLU};
     if (DATABLOCKSIZE[0] % 64 < 56)
     {
@@ -139,24 +142,24 @@ int main(int argc, char *argv[])
         }
     }
 
-    // 3. get the number of data block
+    // 2. get the number of data block
     uint64_t dataBlockAmount = fileSize / DATABLOCKSIZE[0];
     if (fileSize % DATABLOCKSIZE[0] > 0)
         dataBlockAmount++;
 
-    // 4. determining the parity of data block amount
+    // 3. determining the parity of data block amount
     bool oddDataBlockAmount = false;
     if (dataBlockAmount % 2 != 0)
         oddDataBlockAmount = true;
 
-    // 5. get the number of hash value
+    // 4. get the number of hash value
     uint64_t hashValueAmount = dataBlockAmount;
     if (oddDataBlockAmount && layers > 1)
         hashValueAmount++;
     uint64_t hashValueAmountArray[layers];
     hashValueAmountArray[0] = hashValueAmount;
 
-    // pre-assign the size of block and the number of characters for padding
+    // 5. pre-assign the size of block and the number of characters for padding
     uint64_t dataBlockSize = DATABLOCKSIZE[0];
     uint64_t paddingSize = PADDINGSIZE[0];
 
@@ -270,16 +273,6 @@ int main(int argc, char *argv[])
         {
             V[l][i] = lend_to_bend(V[l][i], l);
         }
-
-        // printf("layer  = %lu\n", l);
-        // for (uint64_t i = 0; i < hashValueAmountArray[l] * 8; ++i)
-        // {
-        //     if (1)
-        //     {
-        //         printf("V[%lu][%lu] = %08x\n", l, i, V[l][i]);
-        //     }
-
-        // }
     }
 
     // set the end time
@@ -293,21 +286,6 @@ int main(int argc, char *argv[])
         printf("%02x", Temp[j]);
     }
     printf("\n");
-
-    // for (uint64_t i = 0; i < layers; ++i)
-    // {
-    //     printf("the %lu layer hash value:\n", i);
-    //     for (uint64_t k = 0; k < hashValueAmountArray[i]; ++k)
-    //     {
-    //         unsigned char *Temp = (unsigned char *)&V[i][8 * k];
-    //         for (uint64_t j = 0; j < 32; ++j)
-    //         {
-    //             printf("%02x", Temp[j]);
-    //         }
-    //         printf("\n");
-    //     }
-    //     printf("\n");
-    // }
 
     // close file pointer and data pointer
     fclose(fin);

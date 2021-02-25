@@ -74,19 +74,9 @@ int main(int agrc, char *argv[])
     printf("\nComputing hash value on GPU_CUDA.\n");
 
     // determining data block size
-    // printf("Please enter DataBlock size in Bytes: ");
-    // scanf("%llu", &DATABLOCKSIZE[0]);
-
-    // determining data block size
     uint64_t coef = 0;
     printf("Please enter DataBlock size coefficient in KB: ");
     scanf("%llu", &coef);
-    DATABLOCKSIZE[0] = coef * 1024;
-    if (DATABLOCKSIZE[0] > 600 * 1024 * 1024LLU) 
-    {
-        printf("The data block is too big!\n");
-        exit(EXIT_FAILURE);
-    }
 
     // set the start time
     double start, phase_1, end;
@@ -109,8 +99,6 @@ int main(int agrc, char *argv[])
     printf("the size of file: %llu Bytes\n", fileSize);
 
     // get the number of characters per reading and the reading times
-    if (DATABLOCKSIZE[0] > fileSize)
-        DATABLOCKSIZE[0] = fileSize;
     uint64_t readCharacters = 0;
     if (fileSize <= READSIZE + 100 * 1024 * 1024)
     {
@@ -123,6 +111,25 @@ int main(int agrc, char *argv[])
     uint64_t readTimes = fileSize / readCharacters;
     if (fileSize % readCharacters > 0)
         readTimes++;
+
+    // determine the size of data block
+    if (coef > 0)
+    {
+        DATABLOCKSIZE[0] = coef * 1024;
+        if (DATABLOCKSIZE[0] > readCharacters)
+        {
+            printf("data block is too big.");
+            exit(EXIT_FAILURE);
+        }
+    }
+    else
+    {
+        DATABLOCKSIZE[0] = readCharacters;
+    }
+    if (fileSize % DATABLOCKSIZE[0] > 0)
+    {
+        DATABLOCKSIZE[1] = fileSize % DATABLOCKSIZE[0];
+    }
 
     // get the number of layers in the Merkle Hash Tree
     uint64_t layers = 1;
@@ -174,15 +181,12 @@ int main(int agrc, char *argv[])
     CHECK(cudaMalloc((uint32_t **)&D_V[0], hashValueAmountArray[0] * 8 * sizeof(uint32_t)));
 
     // get data block size, padding characters, data block amount (per reading) and storage size (per reading)
-
     uint64_t dataBlockAmountPerReading = 0;
     uint64_t storageSizePerReading = 0;
     preprocess(readCharacters, &dataBlockAmountPerReading, &storageSizePerReading);
 
     // hash value position using in computation of 0 layer
     uint64_t hashValuePosition = 0;
-
-    // printf("readTimes = %lu\n", readTimes);
 
     // parallelly updating data block's hash value
     for (uint64_t i = 0; i < readTimes; ++i)
@@ -193,7 +197,6 @@ int main(int agrc, char *argv[])
             if (fileSize % readCharacters != 0)
                 readCharacters = fileSize % readCharacters;
             preprocess(readCharacters, &dataBlockAmountPerReading, &storageSizePerReading);
-            // printf("the dataBlockAmountPerReading in the last time: %lu\n", dataBlockAmountPerReading);
         }
 
         // set up block and gird dimension
@@ -212,12 +215,9 @@ int main(int agrc, char *argv[])
         dim3 block1(blockDimension_x);
         dim3 grid1(gridDimension_x);
 
-        // printf("%lu -> gridDimension = %lu blockDimension = %lu\n", i + 1, gridDimension_x, blockDimension_x);
-        // printf("dataBlockAmountPerReading = %lu\n", dataBlockAmountPerReading);
-
         // 1. read characters from input data stream and transfer data from host to device
         C = (char *)malloc(readCharacters);
-        cudaMalloc((char **)&D_C, readCharacters);
+        CHECK(cudaMalloc((char **)&D_C, readCharacters));
         fread(C, 1, readCharacters, fin);
         cudaMemcpy(D_C, C, readCharacters, cudaMemcpyHostToDevice);
         free(C);
@@ -352,8 +352,6 @@ int main(int agrc, char *argv[])
         }
         dim3 block2(blockDimension_x);
         dim3 grid2(gridDimension_x);
-        // printf("hashValueAmountArray[%lu]= %lu\n", l, hashValueAmountArray[l]);
-        // printf("hashValueAmountArray[%lu] * 8 = %lu\n", l, hashValueAmountArray[l] * 8);
         lend_to_bend<<<grid2, block2>>>(D_V[l], hashValueAmountArray[l] * 8, l);
     }
 
@@ -381,21 +379,6 @@ int main(int agrc, char *argv[])
         printf("%02x", Temp[j]);
     }
     printf("\n");
-
-    // for (uint64_t i = 0; i < layers; ++i)
-    // {
-    //     printf("the %lu layer hash value:\n", i);
-    //     for (uint64_t k = 0; k < hashValueAmountArray[i]; ++k)
-    //     {
-    //         unsigned char *Temp = (unsigned char *)&V[i][8 * k];
-    //         for (uint64_t j = 0; j < 32; ++j)
-    //         {
-    //             printf("%02x", Temp[j]);
-    //         }
-    //         printf("\n");
-    //     }
-    //     printf("\n");
-    // }
 
     // free data pointer
     fclose(fin);
@@ -456,7 +439,6 @@ void preprocess(const uint64_t readCharacters, uint64_t *dataBlockAmountPerReadi
     dataBlockAmountArray[1] = 0;
     if (DATABLOCKSIZE[1] > 0)
         dataBlockAmountArray[1] = 1;
-    // printf("readCharacters = %lu, dataBlockAmountArray[0] = %lu, dataBlockAmountArray[1] = %lu\n", readCharacters, dataBlockAmountArray[0], dataBlockAmountArray[1]);
     *dataBlockAmountPerReading = dataBlockAmountArray[0] + dataBlockAmountArray[1];
 
     // 4. get the storage size for per reading
