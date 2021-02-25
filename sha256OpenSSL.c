@@ -7,13 +7,13 @@
 #include <openssl/sha.h>
 
 // the numbers of characters per reading file
-uint64_t READSIZE = 10LL * 1024 * 1024 * 1024;
+uint64_t READSIZE = 20LL * 1024 * 1024 * 1024;
 
 // the path of file
-const char *FILEPATH = "D:\\CUDA\\SHA256\\1_118M.pdf";
+const char *FILEPATH = "D:\\CUDA\\SHA256\\q.txt";
 
 // the size of a data block
-uint64_t DATABLOCKSIZE[2] = {1024llu, 0LLU};
+uint64_t DATABLOCKSIZE[2] = {0llu, 0LLU};
 
 // 1. recording time in seconds
 double getTime()
@@ -54,18 +54,11 @@ int main(int argc, char *argv[])
     rewind(fin);
     printf("the size of file: %llu Bytes\n", fileSize);
 
-    // get the reading times
-    if (fileSize < READSIZE)
-        READSIZE = fileSize;
-    uint64_t readTimes = fileSize / READSIZE;
-    if (fileSize % READSIZE > 0)
-        readTimes++;
-
     // determine the size of data block
     if (coef > 0)
     {
         DATABLOCKSIZE[0] = coef * 1024;
-        if (DATABLOCKSIZE[0] > READSIZE)
+        if (DATABLOCKSIZE[0] > fileSize)
         {
             printf("data block is too big.");
             exit(EXIT_FAILURE);
@@ -73,12 +66,19 @@ int main(int argc, char *argv[])
     }
     else
     {
-        DATABLOCKSIZE[0] = READSIZE;
+        DATABLOCKSIZE[0] = fileSize;
     }
     if (fileSize % DATABLOCKSIZE[0] > 0)
     {
         DATABLOCKSIZE[1] = fileSize % DATABLOCKSIZE[0];
     }
+
+    // get the reading times
+    if (fileSize < READSIZE)
+        READSIZE = fileSize;
+    uint64_t readTimes = fileSize / READSIZE;
+    if (fileSize % READSIZE > 0)
+        readTimes++;
 
     // get the number of layers in the Merkle Hash Tree
     uint64_t layers = 1;

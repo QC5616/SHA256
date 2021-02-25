@@ -35,7 +35,7 @@ const char *FILEPATH = "/home/chenq/cuda/0.txt";
 uint64_t READSIZE = 600LLU * 1024 * 1024;
 
 // the size of a data block per layer
-uint64_t DATABLOCKSIZE[2] = {1LL * 1024 * 1024, 0LLU};
+uint64_t DATABLOCKSIZE[2] = {0LLU, 0LLU};
 
 // the number of characters for padding per layer
 uint64_t PADDINGSIZE[2] = {0LLU, 0LLU};
@@ -97,6 +97,21 @@ int main(int agrc, char *argv[])
     rewind(fin);
     printf("the size of file: %llu Bytes\n", fileSize);
 
+    // determine the size of data block
+    if (coef > 0)
+    {
+        DATABLOCKSIZE[0] = coef * 1024;
+        if (DATABLOCKSIZE[0] > fileSize || DATABLOCKSIZE[0] > READSIZE)
+        {
+            printf("data block is too big.");
+            exit(EXIT_FAILURE);
+        }
+    }
+    else
+    {
+        DATABLOCKSIZE[0] = fileSize;
+    }
+
     // get the number of characters per reading and the reading times
     uint64_t readCharacters = 0;
     if (fileSize <= READSIZE + 100 * 1024 * 1024)
@@ -111,20 +126,7 @@ int main(int agrc, char *argv[])
     if (fileSize % readCharacters > 0)
         readTimes++;
 
-    // determine the size of data block
-    if (coef > 0)
-    {
-        DATABLOCKSIZE[0] = coef * 1024;
-        if (DATABLOCKSIZE[0] > readCharacters)
-        {
-            printf("data block is too big.");
-            exit(EXIT_FAILURE);
-        }
-    }
-    else
-    {
-        DATABLOCKSIZE[0] = readCharacters;
-    }
+    
 
     // get the number of layers in the Merkle Hash Tree
     uint64_t layers = 1;
