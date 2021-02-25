@@ -126,10 +126,6 @@ int main(int agrc, char *argv[])
     {
         DATABLOCKSIZE[0] = readCharacters;
     }
-    if (fileSize % DATABLOCKSIZE[0] > 0)
-    {
-        DATABLOCKSIZE[1] = fileSize % DATABLOCKSIZE[0];
-    }
 
     // get the number of layers in the Merkle Hash Tree
     uint64_t layers = 1;
