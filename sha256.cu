@@ -2,10 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <cuda_runtime.h>
-
-typedef unsigned int uint32_t;
-typedef unsigned long long uint64_t;
 
 #define CHECK(call)                                            \
 {                                                              \

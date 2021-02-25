@@ -3,10 +3,8 @@
 #include <string.h>
 #include <sys/time.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <openssl/sha.h>
-
-// typedef unsigned int uint32_t;
-// typedef unsigned long long uint64_t;
 
 // the numbers of characters per reading file
 uint64_t READSIZE = 10LL * 1024 * 1024 * 1024;

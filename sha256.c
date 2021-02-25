@@ -3,9 +3,7 @@
 #include <string.h>
 #include <sys/time.h>
 #include <stdbool.h>
-
-typedef unsigned int uint32_t;
-typedef unsigned long long uint64_t;
+#include <stdint.h>
 
 // logic functions
 #define ROTL(W, n) (((W << n) & 0xFFFFFFFF) | (W) >> (32 - (n)))
