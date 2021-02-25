@@ -29,7 +29,7 @@ double getTime()
 int main(int argc, char *argv[])
 {
 
-    printf("\nComputing hash value on CPU.\n");
+    printf("\nComputing hash value on CPU_OpenSSL.\n");
 
     // determining data block size
     // printf("Please enter DataBlock size in Bytes: ");
@@ -39,12 +39,6 @@ int main(int argc, char *argv[])
     uint64_t coef = 0;
     printf("Please enter DataBlock size coefficient in KB: ");
     scanf("%llu", &coef);
-    DATABLOCKSIZE[0] = coef * 1024;
-    if (DATABLOCKSIZE[0] > 600 * 1024 * 1024LLU) 
-    {
-        printf("The data block is too big!\n");
-        exit(EXIT_FAILURE);
-    }
 
     // set the start time
     double start, phase_1, end;
@@ -72,6 +66,16 @@ int main(int argc, char *argv[])
     uint64_t readTimes = fileSize / READSIZE;
     if (fileSize % READSIZE > 0)
         readTimes++;
+
+    // determine the data size
+    if (coef > 0)
+    {
+        DATABLOCKSIZE[0] = coef * 1024;
+    }
+    else
+    {
+        DATABLOCKSIZE[0] = fileSize;
+    }
 
     // get the number of layers in the Merkle Hash Tree
     uint64_t layers = 1;
@@ -151,7 +155,7 @@ int main(int argc, char *argv[])
         {
             V[0][32 * dataBlockAmount + i] = V[0][32 * dataBlockAmount - 32 + i];
         }
-    } 
+    }
 
     // recording phase 1 time
     phase_1 = getTime();

@@ -71,7 +71,7 @@ __global__ void lend_to_bend(uint32_t *V, uint64_t h_a, uint64_t l);
 int main(int agrc, char *argv[])
 {
 
-    printf("\nComputing hash value on GPU.\n");
+    printf("\nComputing hash value on GPU_CUDA.\n");
 
     // determining data block size
     // printf("Please enter DataBlock size in Bytes: ");
@@ -182,7 +182,7 @@ int main(int agrc, char *argv[])
     // hash value position using in computation of 0 layer
     uint64_t hashValuePosition = 0;
 
-    printf("readTimes = %lu\n", readTimes);
+    // printf("readTimes = %lu\n", readTimes);
 
     // parallelly updating data block's hash value
     for (uint64_t i = 0; i < readTimes; ++i)
@@ -193,11 +193,11 @@ int main(int agrc, char *argv[])
             if (fileSize % readCharacters != 0)
                 readCharacters = fileSize % readCharacters;
             preprocess(readCharacters, &dataBlockAmountPerReading, &storageSizePerReading);
-            printf("the dataBlockAmountPerReading in the last time: %lu\n", dataBlockAmountPerReading);
+            // printf("the dataBlockAmountPerReading in the last time: %lu\n", dataBlockAmountPerReading);
         }
 
         // set up block and gird dimension
-        uint64_t blockDimension_x = 32;
+        uint64_t blockDimension_x = 128;
         uint64_t gridDimension_x = 1;
         if (dataBlockAmountPerReading > blockDimension_x)
         {
@@ -212,8 +212,8 @@ int main(int agrc, char *argv[])
         dim3 block1(blockDimension_x);
         dim3 grid1(gridDimension_x);
 
-        printf("%lu -> gridDimension = %lu blockDimension = %lu\n", i + 1, gridDimension_x, blockDimension_x);
-        printf("dataBlockAmountPerReading = %lu\n", dataBlockAmountPerReading);
+        // printf("%lu -> gridDimension = %lu blockDimension = %lu\n", i + 1, gridDimension_x, blockDimension_x);
+        // printf("dataBlockAmountPerReading = %lu\n", dataBlockAmountPerReading);
 
         // 1. read characters from input data stream and transfer data from host to device
         C = (char *)malloc(readCharacters);
@@ -456,7 +456,7 @@ void preprocess(const uint64_t readCharacters, uint64_t *dataBlockAmountPerReadi
     dataBlockAmountArray[1] = 0;
     if (DATABLOCKSIZE[1] > 0)
         dataBlockAmountArray[1] = 1;
-    printf("readCharacters = %lu, dataBlockAmountArray[0] = %lu, dataBlockAmountArray[1] = %lu\n", readCharacters, dataBlockAmountArray[0], dataBlockAmountArray[1]);
+    // printf("readCharacters = %lu, dataBlockAmountArray[0] = %lu, dataBlockAmountArray[1] = %lu\n", readCharacters, dataBlockAmountArray[0], dataBlockAmountArray[1]);
     *dataBlockAmountPerReading = dataBlockAmountArray[0] + dataBlockAmountArray[1];
 
     // 4. get the storage size for per reading

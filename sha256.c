@@ -52,18 +52,12 @@ uint32_t lend_to_bend(uint32_t value, uint64_t l);
 // main function
 int main(int argc, char *argv[])
 {
-    printf("\nComputing hash value on CPU.\n");
+    printf("\nComputing hash value on CPU_C.\n");
 
     // determining data block size
     uint64_t coef = 0;
     printf("Please enter DataBlock size coefficient in KB: ");
     scanf("%llu", &coef);
-    DATABLOCKSIZE[0] = coef * 1024;
-    if (DATABLOCKSIZE[0] > 600 * 1024 * 1024LLU) 
-    {
-        printf("The data block is too big!\n");
-        exit(EXIT_FAILURE);
-    }
 
     // set the start time
     double start, phase_1, end;
@@ -86,12 +80,21 @@ int main(int argc, char *argv[])
     printf("the size of file: %llu Bytes\n", fileSize);
 
     // get the reading times
-    if (DATABLOCKSIZE[0] > fileSize)  DATABLOCKSIZE[0] = fileSize;
     if (fileSize < READSIZE)
         READSIZE = fileSize;
     uint64_t readTimes = fileSize / READSIZE;
     if (fileSize % READSIZE > 0)
         readTimes++;
+
+    // determine the data size
+    if (coef > 0)
+    {
+        DATABLOCKSIZE[0] = coef * 1024;
+    }
+    else
+    {
+        DATABLOCKSIZE[0] = fileSize;
+    }
 
     // get the number of layers in the Merkle Hash Tree
     uint64_t layers = 1;
@@ -271,14 +274,12 @@ int main(int argc, char *argv[])
         // printf("layer  = %lu\n", l);
         // for (uint64_t i = 0; i < hashValueAmountArray[l] * 8; ++i)
         // {
-        //     if (1) 
+        //     if (1)
         //     {
         //         printf("V[%lu][%lu] = %08x\n", l, i, V[l][i]);
         //     }
-            
-        // }
-        
 
+        // }
     }
 
     // set the end time
@@ -532,6 +533,6 @@ void updatingHashValue(const uint32_t *E, uint32_t *H, uint64_t N, uint64_t data
 
 // 5. little end to big end
 uint32_t lend_to_bend(uint32_t value, uint64_t l)
-{   
+{
     return (value & 0x000000FFU) << 24 | (value & 0x0000FF00U) << 8 | (value & 0x00FF0000U) >> 8 | (value & 0xFF000000U) >> 24;
 }
