@@ -188,7 +188,7 @@ int main(int argc, char *argv[])
         }
 
         // 1. get characters from input data stream
-        fread(P, 1, dataBlockSize, fin);
+        fread(P, dataBlockSize, 1, fin);
 
         // 2. determining the number of characters for padding
         paddingChar((unsigned char *)P, dataBlockSize, paddingSize);

@@ -40,6 +40,9 @@ uint64_t DATABLOCKSIZE[2] = {0LLU, 0LLU};
 // the number of characters for padding per layer
 uint64_t PADDINGSIZE[2] = {0LLU, 0LLU};
 
+// the number of Threads 
+uint64_t THREADAMOUNT = 64;
+
 // recording time in seconds
 double getTime()
 {
@@ -197,7 +200,7 @@ int main(int agrc, char *argv[])
         }
 
         // set up block and gird dimension
-        uint64_t blockDimension_x = 128;
+        uint64_t blockDimension_x = THREADAMOUNT;
         uint64_t gridDimension_x = 1;
         if (dataBlockAmountPerReading > blockDimension_x)
         {
@@ -215,7 +218,7 @@ int main(int agrc, char *argv[])
         // 1. read characters from input data stream and transfer data from host to device
         C = (char *)malloc(readCharacters);
         CHECK(cudaMalloc((char **)&D_C, readCharacters));
-        fread(C, 1, readCharacters, fin);
+        fread(C, readCharacters, 1, fin);
         cudaMemcpy(D_C, C, readCharacters, cudaMemcpyHostToDevice);
         free(C);
 
@@ -245,7 +248,7 @@ int main(int agrc, char *argv[])
     }
 
     // transform little end to big end
-    uint64_t blockDimension_x = 32;
+    uint64_t blockDimension_x = THREADAMOUNT;
     uint64_t gridDimension_x = 1;
     if (hashValueAmountArray[0] * 8 > blockDimension_x)
     {
@@ -291,7 +294,7 @@ int main(int agrc, char *argv[])
         hashValueAmountArray[l] = hashValueAmount;
 
         // set up block and grid dimension
-        uint64_t blockDimension_x = 32;
+        uint64_t blockDimension_x = THREADAMOUNT;
         uint64_t gridDimension_x = 1;
         if (dataBlockAmount > blockDimension_x)
         {
@@ -335,7 +338,7 @@ int main(int agrc, char *argv[])
         cudaFree(D_E);
 
         // transform little end to big end
-        blockDimension_x = 32;
+        blockDimension_x = THREADAMOUNT;
         gridDimension_x = 1;
         if (hashValueAmountArray[l] * 8 > blockDimension_x)
         {
@@ -393,8 +396,8 @@ int main(int agrc, char *argv[])
     // printf("phase 2 time consumption: %f s\n", end - phase_1);
     // printf("all phase time consumption: %f s\n\n", end - start);
 
-    printf("%f\n", phase_1 - start);
-    printf("%f\n", end - phase_1);
+    // printf("%f\n", phase_1 - start);
+    // printf("%f\n", end - phase_1);
     printf("%f\n\n", end - start);
 
     return 0;

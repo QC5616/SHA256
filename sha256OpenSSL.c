@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
         }
 
         // 1. get characters from input data stream
-        fread(P, 1, dataBlockSize, fin);
+        fread(P, dataBlockSize, 1, fin);
 
         // 2. computing hash value by openssl
         SHA256((unsigned char *)P, dataBlockSize, md);
