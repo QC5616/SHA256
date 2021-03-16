@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
 
     // determining data block size
     uint64_t coef = 0;
-    printf("Please enter DataBlock size coefficient in KB: ");
+    printf("Please enter the coefficient of the size of the data block in KB: ");
     scanf("%llu", &coef);
 
     // set the start time
@@ -62,20 +62,20 @@ int main(int argc, char *argv[])
     start = getTime();
 
     // get the file size
-    printf("have read file: %s\n", argv[1]);
+    printf("Have read file: %s\n", argv[1]);
     FILE *fin;
     fin = fopen(argv[1], "rb");
     if (!fin)
     {
-        printf("reading file failed.\n");
+        printf("Reading file failed.\n");
         if (argc == 1)
-            printf("please enter file name.\n");
+            printf("Please enter file name.\n");
         exit(EXIT_FAILURE);
     }
     fseek(fin, 0, SEEK_END);
     uint64_t fileSize = ftell(fin);
     rewind(fin);
-    printf("the size of file: %llu Bytes\n", fileSize);
+    printf("The size of file: %llu Bytes\n", fileSize);
 
     // determine the size of data block
     if (coef > 0)
@@ -277,7 +277,7 @@ int main(int argc, char *argv[])
     end = getTime();
 
     // present the merkle root
-    printf("the merkle root: ");
+    printf("The Merkle Root: ");
     unsigned char *Temp = (unsigned char *)&V[layers - 1][0];
     for (uint64_t j = 0; j < 32; ++j)
     {

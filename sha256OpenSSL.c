@@ -26,12 +26,11 @@ double getTime()
 // main function
 int main(int argc, char *argv[])
 {
-
     printf("\nComputing hash value on CPU_OpenSSL.\n");
 
     // determining data block size
     uint64_t coef = 0;
-    printf("Please enter DataBlock size coefficient in KB: ");
+    printf("Please enter the coefficient of the size of the data block in KB: ");
     scanf("%llu", &coef);
 
     // set the start time
@@ -39,20 +38,20 @@ int main(int argc, char *argv[])
     start = getTime();
 
     // get the file size
-    printf("have read file: %s\n", argv[1]);
+    printf("Have read file: %s\n", argv[1]);
     FILE *fin;
     fin = fopen(argv[1], "rb");
     if (!fin)
     {
-        printf("reading file failed.\n");
+        printf("Reading file failed.\n");
         if (argc == 1)
-            printf("please enter file name.\n");
+            printf("Please enter file name.\n");
         exit(EXIT_FAILURE);
     }
     fseek(fin, 0, SEEK_END);
     uint64_t fileSize = ftell(fin);
     rewind(fin);
-    printf("the size of file: %llu Bytes\n", fileSize);
+    printf("The size of file: %llu Bytes\n", fileSize);
 
     // determine the size of data block
     if (coef > 0)
@@ -60,7 +59,7 @@ int main(int argc, char *argv[])
         DATABLOCKSIZE[0] = coef * 1024;
         if (DATABLOCKSIZE[0] > fileSize)
         {
-            printf("data block is too big.");
+            printf("Data block is too big.");
             exit(EXIT_FAILURE);
         }
     }
@@ -164,8 +163,6 @@ int main(int argc, char *argv[])
 
     // storing the data after padding
     P = (char *)realloc(P, dataBlockSize);
-
-    getchar();
 
     // cyclically computing hash value
     for (uint64_t l = 1; l < layers; l++)
