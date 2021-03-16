@@ -32,7 +32,7 @@
 const char *FILEPATH = "/home/chenq/cuda/0.txt";
 
 // the numbers of characters per reading file 600LLU * 1024 * 1024
-uint64_t READSIZE = 600LLU * 1024 * 1024;
+uint64_t READSIZE_MAX = 700LLU * 1024 * 1024;
 
 // the size of a data block per layer
 uint64_t DATABLOCKSIZE[2] = {0LLU, 0LLU};
@@ -60,7 +60,7 @@ double getTime()
 }
 
 // preprocess
-void preprocess(const uint64_t readCharacters);
+void preprocess(const uint64_t charactersPerReading);
 
 // set up thread configuration
 void threadConfig(uint64_t threadamount, uint64_t *blockDimension, uint64_t *gridDimension);
@@ -69,16 +69,16 @@ void threadConfig(uint64_t threadamount, uint64_t *blockDimension, uint64_t *gri
 __global__ void paddingChar(unsigned char *D_C, unsigned char *D_P, uint64_t DATABLOCKSIZE0, uint64_t DATABLOCKSIZE1, uint64_t PADDINGSIZE0, uint64_t PADDINGSIZE1, uint64_t dataBlockAmount);
 
 // transform 4 unsigned char to 1 32-bit unsigned int
-__global__ void unsignedCharToUnsignedInt(const unsigned char *D_P, uint32_t *D_T, uint64_t threadamount, uint64_t groups_1, uint64_t groups_2);
+__global__ void unsignedCharToUnsignedInt(const unsigned char *D_P, uint32_t *D_T, uint64_t threadamount, uint64_t groupsPerThread_1, uint64_t groupsPerThread_2);
 
 // extending 16 32-bit integers to 64 32-bit integers
-__global__ void extending(uint32_t *D_T, uint32_t *D_E, uint64_t threadamount, uint64_t groups_1, uint64_t groups_2);
+__global__ void extending(uint32_t *D_T, uint32_t *D_E, uint64_t threadamount, uint64_t groupsPerThread_1, uint64_t groupsPerThread_2);
 
 // updating hash value
 __global__ void updatingHashValue(const uint32_t *D_E, uint32_t *D_H, uint64_t DATABLOCKSIZE0, uint64_t DATABLOCKSIZE1, uint64_t PADDINGSIZE0, uint64_t PADDINGSIZE1, uint64_t dataBlockAmount, uint64_t layer, bool oddDataBlockAmount, uint64_t hashValuePosition);
 
 // little end to big end
-__global__ void lend_to_bend(uint32_t *V, uint64_t h_a, uint64_t l);
+__global__ void lend_to_bend(uint32_t *V, uint64_t threads);
 
 // main function
 int main(int agrc, char *argv[])
@@ -114,7 +114,7 @@ int main(int agrc, char *argv[])
     if (coef > 0)
     {
         DATABLOCKSIZE[0] = coef * 1024;
-        if (DATABLOCKSIZE[0] > fileSize || DATABLOCKSIZE[0] > READSIZE)
+        if (DATABLOCKSIZE[0] > fileSize || DATABLOCKSIZE[0] > READSIZE_MAX)
         {
             printf("Data block is too big.");
             exit(EXIT_FAILURE);
@@ -126,17 +126,17 @@ int main(int agrc, char *argv[])
     }
 
     // get the number of characters per reading and the reading times
-    uint64_t readCharacters = 0;
-    if (fileSize <= READSIZE + 100 * 1024 * 1024)
+    uint64_t charactersPerReading = 0;
+    if (fileSize <= READSIZE_MAX + 20 * 1024 * 1024)
     {
-        readCharacters = fileSize;
+        charactersPerReading = fileSize;
     }
     else
     {
-        readCharacters = (READSIZE / DATABLOCKSIZE[0]) * DATABLOCKSIZE[0];
+        charactersPerReading = (READSIZE_MAX / DATABLOCKSIZE[0]) * DATABLOCKSIZE[0];
     }
-    uint64_t readTimes = fileSize / readCharacters;
-    if (fileSize % readCharacters > 0) 
+    uint64_t readTimes = fileSize / charactersPerReading;
+    if (fileSize % charactersPerReading > 0) 
         readTimes++;
 
     // get the number of layers in the Merkle Hash Tree
@@ -176,12 +176,14 @@ int main(int agrc, char *argv[])
     // get data block size, padding characters, data block amount (per reading) and storage size (per reading)
     uint64_t dataBlockAmountPerReading = 0;
     uint64_t storageSizePerReading = 0;
-    preprocess(readCharacters);
-    dataBlockAmountPerReading = DATABLOCKAMOUNT[0] + DATABLOCKAMOUNT[1];
-    storageSizePerReading = (DATABLOCKSIZE[0] + PADDINGSIZE[0]) * DATABLOCKAMOUNT[0] + (DATABLOCKSIZE[1] + PADDINGSIZE[1]) * DATABLOCKAMOUNT[1];
+    preprocess(charactersPerReading);
     printf("data block 0 size = %lu  data block 1 size = %lu\n", DATABLOCKSIZE[0], DATABLOCKSIZE[1]);
     printf("padding block 0 size = %lu  padding block 1 size = %lu\n", PADDINGSIZE[0], PADDINGSIZE[1]);
     printf("data block 0 amount = %lu  data block 1 amount = %lu\n", DATABLOCKAMOUNT[0], DATABLOCKAMOUNT[1]);
+
+    // get dataBlockAmountPerReading and storageSizePerReading
+    dataBlockAmountPerReading = DATABLOCKAMOUNT[0] + DATABLOCKAMOUNT[1];
+    storageSizePerReading = (DATABLOCKSIZE[0] + PADDINGSIZE[0]) * DATABLOCKAMOUNT[0] + (DATABLOCKSIZE[1] + PADDINGSIZE[1]) * DATABLOCKAMOUNT[1];
     printf("data block amount: %lu\n", dataBlockAmountPerReading);
     printf("storageSizePerReading = %lu\n", storageSizePerReading);
     printf("storageSizePerReading / 64 = %lu\n", storageSizePerReading / 64);
@@ -189,7 +191,8 @@ int main(int agrc, char *argv[])
     // set up thread config 1
     uint64_t blockDimension_1[3] = {32llu, 4llu, 1llu};
     uint64_t gridDimension_1[3] = {1llu, 1llu, 1llu};
-    threadConfig(dataBlockAmountPerReading, blockDimension_1, gridDimension_1);
+    uint64_t threads = dataBlockAmountPerReading;
+    threadConfig(threads, blockDimension_1, gridDimension_1);
     dim3 block_1(blockDimension_1[0], blockDimension_1[1], blockDimension_1[2]);
     dim3 grid_1(gridDimension_1[0], gridDimension_1[1], gridDimension_1[2]);
     printf("block dimension 1: %lu, %lu, %lu\n", blockDimension_1[0], blockDimension_1[1], blockDimension_1[2]);
@@ -198,15 +201,15 @@ int main(int agrc, char *argv[])
     // set up thread config 2
     uint64_t blockDimension_2[3] = {128llu, 1llu, 1llu};
     uint64_t gridDimension_2[3] = {1llu, 1llu, 1llu};
-    uint64_t groups_1 = 2500;
-    uint64_t groups_2 = 0;
-    uint64_t threads = storageSizePerReading / (64 * groups_1); 
-    if  (storageSizePerReading % (64 * groups_1) > 0) 
+    uint64_t groupsPerThread_1 = 2500;
+    uint64_t groupsPerThread_2 = 0;
+    threads = storageSizePerReading / (64 * groupsPerThread_1); 
+    if  (storageSizePerReading % (64 * groupsPerThread_1) > 0) 
     {
         threads++;
-        groups_2 = (storageSizePerReading % (64 * groups_1)) / 64;
+        groupsPerThread_2 = (storageSizePerReading % (64 * groupsPerThread_1)) / 64;
     }
-    printf("group_1 = %llu, group_2 = %llu\n", groups_1, groups_2);
+    printf("group_1 = %llu, group_2 = %llu\n", groupsPerThread_1, groupsPerThread_2);
     threadConfig(threads, blockDimension_2, gridDimension_2);
     dim3 block_2(blockDimension_2[0], blockDimension_2[1], blockDimension_2[2]);
     dim3 grid_2(gridDimension_2[0], gridDimension_2[1], gridDimension_2[2]);
@@ -237,15 +240,13 @@ int main(int agrc, char *argv[])
     for (uint64_t i = 0; i < readTimes; ++i)
     {
         // determining data block amount and storage size for last reading
-        if (i == readTimes - 1 && readTimes > 1)
+        if (readTimes > 1 && i == readTimes - 1 && fileSize % charactersPerReading != 0)
         {
-            // last time read data
-            if (fileSize % readCharacters != 0)
-                readCharacters = fileSize % readCharacters;
-            preprocess(readCharacters);
+            // last time reading data
+            charactersPerReading = fileSize % charactersPerReading;
+            preprocess(charactersPerReading);
             dataBlockAmountPerReading = DATABLOCKAMOUNT[0] + DATABLOCKAMOUNT[1];
             storageSizePerReading = (DATABLOCKSIZE[0] + PADDINGSIZE[0]) * DATABLOCKAMOUNT[0] + (DATABLOCKSIZE[1] + PADDINGSIZE[1]) * DATABLOCKAMOUNT[1];
-            printf("data block amount: %lu\n", dataBlockAmountPerReading);
 
             // set up thread config 1
             blockDimension_1[0] = 32llu;
@@ -265,13 +266,13 @@ int main(int agrc, char *argv[])
             gridDimension_2[0] = 1llu;
             gridDimension_2[1] = 1llu;
             gridDimension_2[2] = 1llu;
-            groups_1 = 2500;
-            groups_2 = 0;
-            threads = storageSizePerReading / (64 * groups_1); 
-            if  (storageSizePerReading % (64 * groups_1) > 0) 
+            groupsPerThread_1 = 2500;
+            groupsPerThread_2 = 0;
+            threads = storageSizePerReading / (64 * groupsPerThread_1); 
+            if  (storageSizePerReading % (64 * groupsPerThread_1) > 0) 
             {
                 threads++;
-                groups_2 = (storageSizePerReading % (64 * groups_1)) / 64;
+                groupsPerThread_2 = (storageSizePerReading % (64 * groupsPerThread_1)) / 64;
             }
             threadConfig(threads, blockDimension_2, gridDimension_2);
             dim3 block_2(blockDimension_2[0], blockDimension_2[1], blockDimension_2[2]);
@@ -279,10 +280,10 @@ int main(int agrc, char *argv[])
         }
 
         // read characters from input data stream and transfer data from host to device
-        C = (char *)malloc(readCharacters);
-        CHECK(cudaMalloc((char **)&D_C, readCharacters));
-        fread(C, readCharacters, 1, fin);
-        cudaMemcpy(D_C, C, readCharacters, cudaMemcpyHostToDevice);
+        C = (char *)malloc(charactersPerReading);
+        CHECK(cudaMalloc((char **)&D_C, charactersPerReading));
+        fread(C, charactersPerReading, 1, fin);
+        cudaMemcpy(D_C, C, charactersPerReading, cudaMemcpyHostToDevice);
         free(C);
 
         // padding characters
@@ -293,13 +294,13 @@ int main(int agrc, char *argv[])
 
         // transform 4 unsigned char to 1 32-bit unsigned int
         CHECK(cudaMalloc((uint32_t **)&D_T, storageSizePerReading));
-        unsignedCharToUnsignedInt<<<grid_2, block_2>>>(D_P, D_T, threads, groups_1, groups_2);
+        unsignedCharToUnsignedInt<<<grid_2, block_2>>>(D_P, D_T, threads, groupsPerThread_1, groupsPerThread_2);
         cudaDeviceSynchronize();
         cudaFree(D_P);
 
         // extending 16 32-bit integers to 64 32-bit integers
         CHECK(cudaMalloc((uint32_t **)&D_E, 4 * storageSizePerReading));
-        extending<<<grid_2, block_2>>>(D_T, D_E, threads, groups_1, groups_2);
+        extending<<<grid_2, block_2>>>(D_T, D_E, threads, groupsPerThread_1, groupsPerThread_2);
         cudaDeviceSynchronize();
         cudaFree(D_T);
 
@@ -314,9 +315,9 @@ int main(int agrc, char *argv[])
     uint64_t blockDimension_3[3] = {32, 1, 1};
     uint64_t gridDimension_3[3] = {1, 1, 1};
     threadConfig(hashValueAmountArray[0] * 8, blockDimension_3, gridDimension_3);
-    dim3 block3(blockDimension_3[0], blockDimension_3[1], blockDimension_3[2]);
-    dim3 grid3(gridDimension_3[0], gridDimension_3[1], gridDimension_3[2]);
-    lend_to_bend<<<grid3, block3>>>(D_V[0], hashValueAmountArray[0] * 8, 0);
+    dim3 block_3(blockDimension_3[0], blockDimension_3[1], blockDimension_3[2]);
+    dim3 grid_3(gridDimension_3[0], gridDimension_3[1], gridDimension_3[2]);
+    lend_to_bend<<<grid_3, block_3>>>(D_V[0], hashValueAmountArray[0] * 8);
 
     // recording phase 1 time
     phase_1 = getTime();
@@ -335,30 +336,31 @@ int main(int agrc, char *argv[])
     // computing hash value for 1 to (layers-1) layer
     for (uint64_t l = 1; l < layers; l++)
     {
-        // update the number of data block for per layer
+        // updating the number of data block
         uint64_t dataBlockAmount = hashValueAmountArray[l - 1] / 2;
 
         // updating storage size
         uint64_t storageSize = (DATABLOCKSIZE[0] + PADDINGSIZE[0]) * dataBlockAmount;
 
-        // updating the parity of data block amount for per layer
+        // updating the parity of data block amount
         oddDataBlockAmount = false;
         if (dataBlockAmount % 2 != 0)
             oddDataBlockAmount = true;
 
-        // updating the number of hash value for per layer
+        // updating the number of hash value
         hashValueAmount = dataBlockAmount;
         if (oddDataBlockAmount && l != layers - 1)
             hashValueAmount++;
         hashValueAmountArray[l] = hashValueAmount;
 
-        // set up block and grid dimension
+        // set up thread config 1
         uint64_t blockDimension_1[3] = {32llu, 1llu, 1llu};
         uint64_t gridDimension_1[3] = {1llu, 1llu, 1llu};
         threadConfig(dataBlockAmount, blockDimension_1, gridDimension_1);
         dim3 block_1(blockDimension_1[0], blockDimension_1[1], blockDimension_1[2]);
         dim3 grid_1(gridDimension_1[0], gridDimension_1[1], gridDimension_1[2]);
 
+        // set up thread config 2
         uint64_t blockDimension_2[3] = {128llu, 1llu, 1llu};
         uint64_t gridDimension_2[3] = {1llu, 1llu, 1llu};
         threadConfig(storageSizePerReading / 64, blockDimension_2, gridDimension_2);
@@ -397,9 +399,9 @@ int main(int agrc, char *argv[])
         uint64_t blockDimension_3[3] = {32, 1, 1};
         uint64_t gridDimension_3[3] = {1, 1, 1};
         threadConfig(hashValueAmountArray[l] * 8, blockDimension_3, gridDimension_3);
-        dim3 block2(blockDimension_3[0], blockDimension_3[1], blockDimension_3[2]);
-        dim3 grid2(gridDimension_3[0], gridDimension_3[1], gridDimension_3[2]);
-        lend_to_bend<<<grid2, block2>>>(D_V[l], hashValueAmountArray[l] * 8, l);
+        dim3 block_3(blockDimension_3[0], blockDimension_3[1], blockDimension_3[2]);
+        dim3 grid_3(gridDimension_3[0], gridDimension_3[1], gridDimension_3[2]);
+        lend_to_bend<<<grid_3, block_3>>>(D_V[l], hashValueAmountArray[l] * 8);
     }
 
     // assign the storage space of the hash value for per layer on host side
@@ -418,7 +420,7 @@ int main(int agrc, char *argv[])
     // set the end time
     end = getTime();
 
-    // present the merkle root
+    // print the merkle root
     printf("The Merkle Root: ");
     unsigned char *Temp = (unsigned char *)&V[layers - 1][0];
     for (uint64_t j = 0; j < 32; ++j)
@@ -438,22 +440,19 @@ int main(int agrc, char *argv[])
         cudaFree(D_V[i]);
     }
 
-    // show time consumption
-    // printf("%f\n", phase_1 - start);
-    // printf("%f\n", end - phase_1);
+    // print time consumption
     printf("%f\n\n", end - start);
     
     return 0;
 }
 
 // get data block size, padding characters, data block amount and storage size
-void preprocess(const uint64_t readCharacters)
+void preprocess(const uint64_t charactersPerReading)
 {
     // 1. get the the size of data block for per reading
-    if (readCharacters % DATABLOCKSIZE[0] > 0)
-    {
-        DATABLOCKSIZE[1] = readCharacters % DATABLOCKSIZE[0];
-    }
+    DATABLOCKSIZE[1] = 0;
+    if (charactersPerReading % DATABLOCKSIZE[0] > 0)
+        DATABLOCKSIZE[1] = charactersPerReading % DATABLOCKSIZE[0];
 
     // 2. get the number of characters of padding for per reading
     if (DATABLOCKSIZE[0] % 64 < 56)
@@ -477,7 +476,7 @@ void preprocess(const uint64_t readCharacters)
     }
 
     // 3. get the number of data block for per reading
-    DATABLOCKAMOUNT[0] = readCharacters / DATABLOCKSIZE[0];
+    DATABLOCKAMOUNT[0] = charactersPerReading / DATABLOCKSIZE[0];
     DATABLOCKAMOUNT[1] = 0;
     if (DATABLOCKSIZE[1] > 0)
         DATABLOCKAMOUNT[1] = 1;
@@ -491,13 +490,15 @@ void threadConfig(uint64_t threadamount, uint64_t *blockDimension, uint64_t *gri
     {
         gridDimension[0] = threadamount / (blockDimension[0] * blockDimension[1] * blockDimension[2]);
         if (threadamount % blockDimension[0] > 0)
-        gridDimension[0]++;
+            gridDimension[0]++;
+        gridDimension[1] = 1;
+        gridDimension[2] = 1;
     }
     else
     {
-        blockDimension[0] = threadamount;
-        blockDimension[1] = 1;
-        blockDimension[2] = 1;
+        gridDimension[0] = 1;
+        gridDimension[1] = 1;
+        gridDimension[2] = 1;
     }
 }
 
@@ -505,13 +506,8 @@ void threadConfig(uint64_t threadamount, uint64_t *blockDimension, uint64_t *gri
 __global__ void paddingChar(unsigned char *D_C, unsigned char *D_P, uint64_t DATABLOCKSIZE0, uint64_t DATABLOCKSIZE1, uint64_t PADDINGSIZE0, uint64_t PADDINGSIZE1, uint64_t dataBlockAmount)
 {
     // determining threadId
-    // uint64_t ix = blockIdx.x * blockDim.x + threadIdx.x;
-    // uint64_t iy = blockIdx.y * blockDim.y + threadIdx.y;
-    // uint64_t idx = iy * (gridDim.x * blockDim.x) + ix;
-
     uint64_t idx = ((gridDim.x * gridDim.y * blockIdx.z) + (gridDim.x * blockIdx.y) + blockIdx.x) * (blockDim.x * blockDim.y * blockDim.z)
         + ((blockDim.x * blockDim.y) * threadIdx.z + (blockDim.x * threadIdx.y) + threadIdx.x);
-
 
     // determining blocksize and padding size
     uint64_t dataBlockSize = DATABLOCKSIZE0;
@@ -531,10 +527,7 @@ __global__ void paddingChar(unsigned char *D_C, unsigned char *D_P, uint64_t DAT
     if (idx < dataBlockAmount)
     {
         // cpy chars from orginal chars address to padded address
-        for (uint32_t i = 0; i < dataBlockSize; i++)
-        {
-            D_P[x2 + i] = D_C[x1 + i];
-        }
+        memcpy(&D_P[x2], &D_C[x1], dataBlockSize);
 
         //  first time padding, padding 1000 0000
         D_P[x2 + dataBlockSize] = 0x80;
@@ -554,33 +547,27 @@ __global__ void paddingChar(unsigned char *D_C, unsigned char *D_P, uint64_t DAT
 }
 
 // transform 4 unsigned char to 32-bit unsiged int
-__global__ void unsignedCharToUnsignedInt(const unsigned char *D_P, uint32_t *D_T, uint64_t threadamount, uint64_t groups_1, uint64_t groups_2)
+__global__ void unsignedCharToUnsignedInt(const unsigned char *D_P, uint32_t *D_T, uint64_t threadamount, uint64_t groupsPerThread_1, uint64_t groupsPerThread_2)
 {
-    // determining threadId
-    // uint64_t ix = blockIdx.x * blockDim.x + threadIdx.x;
-    // uint64_t iy = blockIdx.y * blockDim.y + threadIdx.y;
-    // uint64_t idx = iy * (gridDim.x * blockDim.x) + ix;
-
     // determining threadId
     uint64_t idx = ((gridDim.x * gridDim.y * blockIdx.z) 
                     + (gridDim.x * blockIdx.y) + blockIdx.x) * (blockDim.x * blockDim.y * blockDim.z)
                     + ((blockDim.x * blockDim.y) * threadIdx.z + (blockDim.x * threadIdx.y) + threadIdx.x);
 
-
-
     // initial address in D_P per thread
-    uint64_t x1 = idx * 64 * groups_1;
+    uint64_t x1 = idx * 64 * groupsPerThread_1;
 
     // initial address in D_T per thread
-    uint64_t x2 = idx * 16 * groups_1;
+    uint64_t x2 = idx * 16 * groupsPerThread_1;
 
-    uint64_t N = groups_1;
-    if (idx == threadamount - 1) N = groups_2;
+    // the cycle counts of transform from unsigned char to unsigned int per thread
+    uint64_t cycle_counts = groupsPerThread_1;
+    if (idx == threadamount - 1) cycle_counts = groupsPerThread_2;
 
     // transform
     if (idx < threadamount)
     { 
-        for (uint64_t i = 0; i < N; i++)
+        for (uint64_t i = 0; i < cycle_counts; i++)
         {
             D_T[x2 + 0 + 16 * i] = (D_P[x1 + 0 + 64 * i] << 24) + (D_P[x1 + 1 + 64 * i] << 16) + (D_P[x1 + 2 + 64 * i] << 8) + D_P[x1 + 3 + 64 * i];
             D_T[x2 + 1 + 16 * i] = (D_P[x1 + 4 + 64 * i] << 24) + (D_P[x1 + 5 + 64 * i] << 16) + (D_P[x1 + 6 + 64 * i] << 8) + D_P[x1 + 7 + 64 * i];
@@ -603,29 +590,24 @@ __global__ void unsignedCharToUnsignedInt(const unsigned char *D_P, uint32_t *D_
 }
 
 // extending 16 32-bit integers to 64 32-bit integers
-__global__ void extending(uint32_t *D_T, uint32_t *D_E, uint64_t threadamount, uint64_t groups_1, uint64_t groups_2)
+__global__ void extending(uint32_t *D_T, uint32_t *D_E, uint64_t threadamount, uint64_t groupsPerThread_1, uint64_t groupsPerThread_2)
 {
-    // determining threadId
-    // uint64_t ix = blockIdx.x * blockDim.x + threadIdx.x;
-    // uint64_t iy = blockIdx.y * blockDim.y + threadIdx.y;
-    // uint64_t idx = iy * (gridDim.x * blockDim.x) + ix;
-
     // determining threadId
     uint64_t idx = ((gridDim.x * gridDim.y * blockIdx.z) + (gridDim.x * blockIdx.y) + blockIdx.x) * (blockDim.x * blockDim.y * blockDim.z)
                     + ((blockDim.x * blockDim.y) * threadIdx.z + (blockDim.x * threadIdx.y) + threadIdx.x);
 
     // initial address in D_T per thread
-    uint64_t x1 = idx * 16 * groups_1;
+    uint64_t x1 = idx * 16 * groupsPerThread_1;
 
     // initial address in D_E per thread
-    uint64_t x2 = idx * 64 * groups_1;
+    uint64_t x2 = idx * 64 * groupsPerThread_1;
 
-    uint64_t N = groups_1;
-    if (idx == threadamount - 1) N = groups_2;
+    uint64_t cycle_counts = groupsPerThread_1;
+    if (idx == threadamount - 1) cycle_counts = groupsPerThread_2;
 
     if (idx < threadamount)
     {
-        for (uint64_t i = 0; i < N; i++)
+        for (uint64_t i = 0; i < cycle_counts; i++)
         {
             D_E[x2 + 64 * i + 0] = D_T[x1 + 16 * i + 0];
             D_E[x2 + 64 * i + 1] = D_T[x1 + 16 * i + 1];
@@ -650,43 +632,11 @@ __global__ void extending(uint32_t *D_T, uint32_t *D_E, uint64_t threadamount, u
             }
         }
     }
-    // if (idx == 0)
-    // {
-    //     printf("\nidx = %llu\n", idx);
-    //     printf("x1 = %llu x2 = %llu\n", x1, x2);
-    //     for (uint64_t i = 0; i < 128; i++)
-    //     {
-    //         printf("D_E[%llu] = %x\n", i, D_E[i + x2]);
-    //     }
-    // }
-    // if (idx == dataBlockAmount - 2)
-    // {
-    //     printf("\nidx = %llu\n", idx);
-    //     printf("x1 = %llu x2 = %llu\n", x1, x2);
-    //     for (uint64_t i = 0; i < 128; i++)
-    //     {
-    //         printf("D_E[%llu] = %x\n", i, D_E[i + x2]);
-    //     }
-    // }
-    // if (idx == dataBlockAmount - 1)
-    // {
-    //     printf("\nidx = %llu\n", idx);
-    //     printf("x1 = %llu x2 = %llu\n", x1, x2);
-    //     for (uint64_t i = 0; i < 128; i++)
-    //     {
-    //         printf("D_E[%llu] = %x\n", i, D_E[i + x2]);
-    //     }
-    // }
 }
 
 // updating hash value
 __global__ void updatingHashValue(const uint32_t *D_E, uint32_t *D_H, uint64_t DATABLOCKSIZE0, uint64_t DATABLOCKSIZE1, uint64_t PADDINGSIZE0, uint64_t PADDINGSIZE1, uint64_t dataBlockAmount, uint64_t layer, bool oddDataBlockAmount, uint64_t hashValuePosition)
 {
-    // determining threadId
-    // uint64_t ix = blockIdx.x * blockDim.x + threadIdx.x;
-    // uint64_t iy = blockIdx.y * blockDim.y + threadIdx.y;
-    // uint64_t idx = iy * (gridDim.x * blockDim.x) + ix;
-
     uint64_t idx = ((gridDim.x * gridDim.y * blockIdx.z) + (gridDim.x * blockIdx.y) + blockIdx.x) * (blockDim.x * blockDim.y * blockDim.z)
         + ((blockDim.x * blockDim.y) * threadIdx.z + (blockDim.x * threadIdx.y) + threadIdx.x);
 
@@ -706,7 +656,7 @@ __global__ void updatingHashValue(const uint32_t *D_E, uint32_t *D_H, uint64_t D
     uint64_t x2 = 8 * idx;
 
     // determining the number of groups for per data block
-    uint64_t N = (dataBlockSize + paddingSize) / 64;
+    uint64_t groupsPerDataBlock = (dataBlockSize + paddingSize) / 64;
 
     // preprocess
     uint32_t t1, t2, h1, h2, h3, h4, h5, h6, h7, h8;
@@ -724,76 +674,28 @@ __global__ void updatingHashValue(const uint32_t *D_E, uint32_t *D_H, uint64_t D
     }
 
     const uint32_t K[64] = {
-        0x428a2f98,
-        0x71374491,
-        0xb5c0fbcf,
-        0xe9b5dba5,
-        0x3956c25b,
-        0x59f111f1,
-        0x923f82a4,
-        0xab1c5ed5,
-        0xd807aa98,
-        0x12835b01,
-        0x243185be,
-        0x550c7dc3,
-        0x72be5d74,
-        0x80deb1fe,
-        0x9bdc06a7,
-        0xc19bf174,
-        0xe49b69c1,
-        0xefbe4786,
-        0x0fc19dc6,
-        0x240ca1cc,
-        0x2de92c6f,
-        0x4a7484aa,
-        0x5cb0a9dc,
-        0x76f988da,
-        0x983e5152,
-        0xa831c66d,
-        0xb00327c8,
-        0xbf597fc7,
-        0xc6e00bf3,
-        0xd5a79147,
-        0x06ca6351,
-        0x14292967,
-        0x27b70a85,
-        0x2e1b2138,
-        0x4d2c6dfc,
-        0x53380d13,
-        0x650a7354,
-        0x766a0abb,
-        0x81c2c92e,
-        0x92722c85,
-        0xa2bfe8a1,
-        0xa81a664b,
-        0xc24b8b70,
-        0xc76c51a3,
-        0xd192e819,
-        0xd6990624,
-        0xf40e3585,
-        0x106aa070,
-        0x19a4c116,
-        0x1e376c08,
-        0x2748774c,
-        0x34b0bcb5,
-        0x391c0cb3,
-        0x4ed8aa4a,
-        0x5b9cca4f,
-        0x682e6ff3,
-        0x748f82ee,
-        0x78a5636f,
-        0x84c87814,
-        0x8cc70208,
-        0x90befffa,
-        0xa4506ceb,
-        0xbef9a3f7,
-        0xc67178f2,
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, \
+        0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, \
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, \
+        0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, \
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, \
+        0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da, \
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, \
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, \
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, \
+        0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, \
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, \
+        0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, \
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, \
+        0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3, \
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, \
+        0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2, \
     };
 
     // cycliclly updating hash value
     if (idx < dataBlockAmount)
     {
-        for (uint32_t i = 0; i < N; i++)
+        for (uint32_t i = 0; i < groupsPerDataBlock; i++)
         {
             for (uint32_t j = 0; j < 64; j++)
             {
@@ -839,26 +741,17 @@ __global__ void updatingHashValue(const uint32_t *D_E, uint32_t *D_H, uint64_t D
         D_H[8 * dataBlockAmount + 6 + hashValuePosition] = D_H[8 * dataBlockAmount - 2 + hashValuePosition];
         D_H[8 * dataBlockAmount + 7 + hashValuePosition] = D_H[8 * dataBlockAmount - 1 + hashValuePosition];
     }
-    // printf("the layer %lu -> h[%lu]: %08x, %08x, %08x, %08x, %08x, %08x, %08x, %08x\n", l, idx, h1,h2,h3,h4,h5,h6,h7,h8);
 }
 
 // little end to big end
-__global__ void lend_to_bend(uint32_t *V, uint64_t v_a, uint64_t l)
+__global__ void lend_to_bend(uint32_t *V, uint64_t threads)
 {
-    // determining threadId
-    // uint64_t ix = blockIdx.x * blockDim.x + threadIdx.x;
-    // uint64_t iy = blockIdx.y * blockDim.y + threadIdx.y;
-    // uint64_t idx = iy * (gridDim.x * blockDim.x) + ix;
-
     uint64_t idx = ((gridDim.x * gridDim.y * blockIdx.z) + (gridDim.x * blockIdx.y) + blockIdx.x) * (blockDim.x * blockDim.y * blockDim.z)
         + ((blockDim.x * blockDim.y) * threadIdx.z + (blockDim.x * threadIdx.y) + threadIdx.x);
 
     // little end to big end
-    if (idx < v_a)
+    if (idx < threads)
     {
-        // if (1) printf("layer %lu: v[%lu] = %08x\n", l, idx, V[idx]);
-        V[idx] = (V[idx] & 0x000000FFU) << 24 | (V[idx] & 0x0000FF00U) << 8 |
-                 (V[idx] & 0x00FF0000U) >> 8 | (V[idx] & 0xFF000000U) >> 24;
-        // if (1) printf("layer %lu: v[%lu] = %08x\n", l, idx, V[idx]);
+        V[idx] = (V[idx] & 0x000000FFU) << 24 | (V[idx] & 0x0000FF00U) << 8 | (V[idx] & 0x00FF0000U) >> 8 | (V[idx] & 0xFF000000U) >> 24;
     }
 }

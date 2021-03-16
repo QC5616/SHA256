@@ -92,7 +92,9 @@ int main(int argc, char *argv[])
         layers++;
     }
 
-    // computing hash value for 0 layer
+// *********************************************************************************
+// ****************** Computing 0 layer hash value *********************************
+// *********************************************************************************
 
     // 1. get the number of data block
     uint64_t dataBlockAmount = fileSize / DATABLOCKSIZE[0];
@@ -125,10 +127,10 @@ int main(int argc, char *argv[])
     unsigned char md[32] = {0};
 
     // cyclically updating data block's hash value
-    for (uint64_t a = 0; a < dataBlockAmount; ++a)
+    for (uint64_t i = 0; i < dataBlockAmount; ++i)
     {
         // handle the particular data block
-        if (a == dataBlockAmount - 1 && DATABLOCKSIZE[1] > 0)
+        if (i == dataBlockAmount - 1 && DATABLOCKSIZE[1] > 0)
         {
             dataBlockSize = DATABLOCKSIZE[1];
             P = (char *)realloc(P, dataBlockSize);
@@ -141,7 +143,7 @@ int main(int argc, char *argv[])
         SHA256((unsigned char *)P, dataBlockSize, md);
 
         // 3. stroing data block hash value
-        memcpy(&(V[0][a * 32]), md, 32);
+        memcpy(&(V[0][i * 32]), md, 32);
     }
 
     // when the number of hash vaule amount is odd, copy the hash value
@@ -156,7 +158,9 @@ int main(int argc, char *argv[])
     // recording phase 1 time
     phase_1 = getTime();
 
-    // computing hash value for 1 to (layers-1) layer
+// *********************************************************************************
+// ****************** Computing 2 ~ (layers - 1) layer hash value ******************
+// *********************************************************************************
 
     // pre-assign the size of data block and the number of characters for padding
     dataBlockSize = 64LLU;
@@ -185,16 +189,16 @@ int main(int argc, char *argv[])
         V[l] = (unsigned char *)malloc(hashValueAmount * 32);
 
         // computing hash value for per layer
-        for (uint64_t a = 0; a < dataBlockAmount; ++a)
+        for (uint64_t i = 0; i < dataBlockAmount; ++i)
         {
             // 1. get data from the previous hash value
-            memcpy(P, &V[l - 1][a * 64], dataBlockSize);
+            memcpy(P, &V[l - 1][i * 64], dataBlockSize);
 
             // 2. computing hash value by openssl
             SHA256((unsigned char *)P, dataBlockSize, md);
 
             // 3. stroing data block hash value
-            memcpy(&(V[l][a * 32]), md, 32);
+            memcpy(&(V[l][i * 32]), md, 32);
         }
 
         // when the number of hash vaule amount is odd, copy the hash value
