@@ -69,10 +69,10 @@ void threadConfig(uint64_t threadamount, uint64_t *blockDimension, uint64_t *gri
 __global__ void paddingChar(unsigned char *D_C, unsigned char *D_P, uint64_t DATABLOCKSIZE0, uint64_t DATABLOCKSIZE1, uint64_t PADDINGSIZE0, uint64_t PADDINGSIZE1, uint64_t dataBlockAmount);
 
 // transform 4 unsigned char to 1 32-bit unsigned int
-__global__ void unsignedCharToUnsignedInt(const unsigned char *D_P, uint32_t *D_T, uint64_t threadamount, uint64_t groupsPerThread_1, uint64_t groupsPerThread_2);
+__global__ void unsignedCharToUnsignedInt(const unsigned char *D_P, uint32_t *D_T, uint64_t dataBlockAmount, uint64_t groupsPerThread_1, uint64_t groupsPerThread_2);
 
 // extending 16 32-bit integers to 64 32-bit integers
-__global__ void extending(uint32_t *D_T, uint32_t *D_E, uint64_t threadamount, uint64_t groupsPerThread_1, uint64_t groupsPerThread_2);
+__global__ void extending(uint32_t *D_T, uint32_t *D_E, uint64_t dataBlockAmount, uint64_t groupsPerThread_1, uint64_t groupsPerThread_2);
 
 // updating hash value
 __global__ void updatingHashValue(const uint32_t *D_E, uint32_t *D_H, uint64_t DATABLOCKSIZE0, uint64_t DATABLOCKSIZE1, uint64_t PADDINGSIZE0, uint64_t PADDINGSIZE1, uint64_t dataBlockAmount, uint64_t layer, bool oddDataBlockAmount, uint64_t hashValuePosition);
@@ -97,7 +97,7 @@ int main(int agrc, char *argv[])
     // convert argv[] to int
     int argv_2 = atoi(argv[2]);
     int argv_3 = atoi(argv[3]);
-    int argv_4 = atoi(argv[4]);
+    // int argv_4 = atoi(argv[4]);
 
     // get the file size
     printf("Have read file: %s\n", argv[1]);
@@ -195,21 +195,26 @@ int main(int agrc, char *argv[])
     // set up thread config 1
     uint64_t blockDimension_1[3] = {argv_2, 1llu, 1llu};
     uint64_t gridDimension_1[3] = {1llu, 1llu, 1llu};
-    uint64_t threads = dataBlockAmountPerReading;
-    threadConfig(threads, blockDimension_1, gridDimension_1);
+    threadConfig(dataBlockAmountPerReading, blockDimension_1, gridDimension_1);
     dim3 block_1(blockDimension_1[0], blockDimension_1[1], blockDimension_1[2]);
     dim3 grid_1(gridDimension_1[0], gridDimension_1[1], gridDimension_1[2]);
-    printf("threads of thread config 1 = %lu\n", threads);
     printf("block_dimension_1: %lu, %lu, %lu\n", blockDimension_1[0], blockDimension_1[1], blockDimension_1[2]);
     printf("grid_dimension_1: %lu, %lu, %lu\n",  gridDimension_1[0],  gridDimension_1[1],  gridDimension_1[2]);
 
     // set up thread config 2
     uint64_t blockDimension_2[3] = {argv_3, 1llu, 1llu};
     uint64_t gridDimension_2[3] = {1llu, 1llu, 1llu};
-    uint64_t groupsPerThread_1 = argv_4;
-    uint64_t groupsPerThread_2 = 0;
-    threads = storageSizePerReading / (64 * groupsPerThread_1); 
-    if  (storageSizePerReading > 64 * groupsPerThread_1) 
+    uint64_t groupsPerThread_1 = 1llu;
+    uint64_t groupsPerThread_2 = 0llu;
+    uint64_t groupsTotal = storageSizePerReading / 64;
+    uint64_t threads = 0;
+    const uint64_t blocksInGrid = 28;
+    
+    groupsPerThread_1 = groupsTotal / (argv_3 * blocksInGrid);
+    if (groupsTotal % (argv_3 * blocksInGrid) > 0) ++groupsPerThread_1; 
+
+     
+    if  (storageSizePerReading >= 64 * groupsPerThread_1) 
     {
         groupsPerThread_2 = (storageSizePerReading % (64 * groupsPerThread_1)) / 64;
     }
@@ -218,12 +223,15 @@ int main(int agrc, char *argv[])
         printf("Don't correctly set up thread config 2\n ");
         exit(-1);
     }
+
+    threads = groupsTotal / groupsPerThread_1;
     if (groupsPerThread_2 > 0) ++threads;
+
     threadConfig(threads, blockDimension_2, gridDimension_2);
     dim3 block_2(blockDimension_2[0], blockDimension_2[1], blockDimension_2[2]);
     dim3 grid_2(gridDimension_2[0], gridDimension_2[1], gridDimension_2[2]);
+
     printf("group_1 = %llu, group_2 = %llu\n", groupsPerThread_1, groupsPerThread_2);
-    printf("threads of thread config 2 = %lu\n", threads);
     printf("block dimension 2: %lu, %lu, %lu\n", blockDimension_2[0], blockDimension_2[1], blockDimension_2[2]);
     printf("grid dimension 2: %lu, %lu, %lu\n", gridDimension_2[0], gridDimension_2[1], gridDimension_2[2]);
 
@@ -260,34 +268,41 @@ int main(int agrc, char *argv[])
             storageSizePerReading = (DATABLOCKSIZE[0] + PADDINGSIZE[0]) * DATABLOCKAMOUNT[0] + (DATABLOCKSIZE[1] + PADDINGSIZE[1]) * DATABLOCKAMOUNT[1];
 
             // set up thread config 1
-            blockDimension_1[0] = 32llu;
-            blockDimension_1[1] = 4llu;
-            blockDimension_1[2] = 1llu;
-            gridDimension_1[0] = 1llu;
-            gridDimension_1[1] = 1llu;
-            gridDimension_1[2] = 1llu;
+            uint64_t blockDimension_1[3] = {argv_2, 1llu, 1llu};
+            uint64_t gridDimension_1[3] = {1llu, 1llu, 1llu};
             threadConfig(dataBlockAmountPerReading, blockDimension_1, gridDimension_1);
             dim3 block_1(blockDimension_1[0], blockDimension_1[1], blockDimension_1[2]);
             dim3 grid_1(gridDimension_1[0], gridDimension_1[1], gridDimension_1[2]);
+            printf("block_dimension_1: %lu, %lu, %lu\n", blockDimension_1[0], blockDimension_1[1], blockDimension_1[2]);
+            printf("grid_dimension_1: %lu, %lu, %lu\n",  gridDimension_1[0],  gridDimension_1[1],  gridDimension_1[2]);
 
             // set up thread config 2
-            blockDimension_2[0] = 128llu;
-            blockDimension_2[1] = 1llu;
-            blockDimension_2[2] = 1llu;
-            gridDimension_2[0] = 1llu;
-            gridDimension_2[1] = 1llu;
-            gridDimension_2[2] = 1llu;
-            groupsPerThread_1 = 2500;
-            groupsPerThread_2 = 0;
-            threads = storageSizePerReading / (64 * groupsPerThread_1); 
-            if  (storageSizePerReading % (64 * groupsPerThread_1) > 0) 
+            uint64_t blockDimension_2[3] = {argv_3, 1llu, 1llu};
+            uint64_t gridDimension_2[3] = {1llu, 1llu, 1llu};
+            uint64_t groupsPerThread_1 = 1llu;
+            uint64_t groupsPerThread_2 = 0llu;
+            uint64_t groupsTotal = storageSizePerReading / 64;
+            groupsPerThread_1 = groupsTotal / (argv_3 * blocksInGrid);
+            if (groupsTotal % (argv_3 * blocksInGrid) > 0) 
+                ++groupsPerThread_1; 
+
+            uint64_t threads = groupsTotal / groupsPerThread_1; 
+            if  (storageSizePerReading >= 64 * groupsPerThread_1) 
             {
-                threads++;
                 groupsPerThread_2 = (storageSizePerReading % (64 * groupsPerThread_1)) / 64;
             }
+            else
+            {
+                printf("Don't correctly set up thread config 2\n ");
+                exit(-1);
+            }
+            if (groupsPerThread_2 > 0) ++threads;
             threadConfig(threads, blockDimension_2, gridDimension_2);
             dim3 block_2(blockDimension_2[0], blockDimension_2[1], blockDimension_2[2]);
             dim3 grid_2(gridDimension_2[0], gridDimension_2[1], gridDimension_2[2]);
+            printf("group_1 = %llu, group_2 = %llu\n", groupsPerThread_1, groupsPerThread_2);
+            printf("block dimension 2: %lu, %lu, %lu\n", blockDimension_2[0], blockDimension_2[1], blockDimension_2[2]);
+            printf("grid dimension 2: %lu, %lu, %lu\n", gridDimension_2[0], gridDimension_2[1], gridDimension_2[2]);
         }
 
         // read characters from input data stream and transfer data from host to device
@@ -565,7 +580,7 @@ __global__ void paddingChar(unsigned char *D_C, unsigned char *D_P, uint64_t DAT
 }
 
 // transform 4 unsigned char to 32-bit unsiged int
-__global__ void unsignedCharToUnsignedInt(const unsigned char *D_P, uint32_t *D_T, uint64_t threadamount, uint64_t groupsPerThread_1, uint64_t groupsPerThread_2)
+__global__ void unsignedCharToUnsignedInt(const unsigned char *D_P, uint32_t *D_T, uint64_t dataBlockAmount, uint64_t groupsPerThread_1, uint64_t groupsPerThread_2)
 {
     // determining threadId
     uint64_t idx = ((gridDim.x * gridDim.y * blockIdx.z) 
@@ -580,10 +595,10 @@ __global__ void unsignedCharToUnsignedInt(const unsigned char *D_P, uint32_t *D_
 
     // the cycle counts of transform from unsigned char to unsigned int per thread
     uint64_t cycle_counts = groupsPerThread_1;
-    if (idx == threadamount - 1) cycle_counts = groupsPerThread_2;
+    if (idx == dataBlockAmount - 1) cycle_counts = groupsPerThread_2;
 
     // transform
-    if (idx < threadamount)
+    if (idx < dataBlockAmount)
     { 
         for (uint64_t i = 0; i < cycle_counts; i++)
         {
@@ -608,7 +623,7 @@ __global__ void unsignedCharToUnsignedInt(const unsigned char *D_P, uint32_t *D_
 }
 
 // extending 16 32-bit integers to 64 32-bit integers
-__global__ void extending(uint32_t *D_T, uint32_t *D_E, uint64_t threadamount, uint64_t groupsPerThread_1, uint64_t groupsPerThread_2)
+__global__ void extending(uint32_t *D_T, uint32_t *D_E, uint64_t dataBlockAmount, uint64_t groupsPerThread_1, uint64_t groupsPerThread_2)
 {
     // determining threadId
     uint64_t idx = ((gridDim.x * gridDim.y * blockIdx.z) + (gridDim.x * blockIdx.y) + blockIdx.x) * (blockDim.x * blockDim.y * blockDim.z)
@@ -621,9 +636,9 @@ __global__ void extending(uint32_t *D_T, uint32_t *D_E, uint64_t threadamount, u
     uint64_t x2 = idx * 64 * groupsPerThread_1;
 
     uint64_t cycle_counts = groupsPerThread_1;
-    if (idx == threadamount - 1) cycle_counts = groupsPerThread_2;
+    if (idx == dataBlockAmount - 1) cycle_counts = groupsPerThread_2;
 
-    if (idx < threadamount)
+    if (idx < dataBlockAmount)
     {
         for (uint64_t i = 0; i < cycle_counts; i++)
         {
@@ -673,7 +688,7 @@ __global__ void updatingHashValue(const uint32_t *D_E, uint32_t *D_H, uint64_t D
     // initial address in D_H per thread
     uint64_t x2 = 8 * idx;
 
-    // determining the number of groups for per data block
+    // determining the number of 64_byte_groups for per data block
     uint64_t groupsPerDataBlock = (dataBlockSize + paddingSize) / 64;
 
     // preprocess
