@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-
+// check cudaMalloc error
 #define CHECK(call)                                            \
 {                                                              \
     const cudaError_t error = call;                            \
@@ -94,6 +94,11 @@ int main(int agrc, char *argv[])
     double start, end, phase_1;
     start = getTime();
 
+    // convert argv[] to int
+    int argv_2 = atoi(argv[2]);
+    int argv_3 = atoi(argv[3]);
+    int argv_4 = atoi(argv[4]);
+
     // get the file size
     printf("Have read file: %s\n", argv[1]);
     FILE *fin;
@@ -177,42 +182,48 @@ int main(int agrc, char *argv[])
     uint64_t dataBlockAmountPerReading = 0;
     uint64_t storageSizePerReading = 0;
     preprocess(charactersPerReading);
-    printf("data block 0 size = %lu  data block 1 size = %lu\n", DATABLOCKSIZE[0], DATABLOCKSIZE[1]);
-    printf("padding block 0 size = %lu  padding block 1 size = %lu\n", PADDINGSIZE[0], PADDINGSIZE[1]);
-    printf("data block 0 amount = %lu  data block 1 amount = %lu\n", DATABLOCKAMOUNT[0], DATABLOCKAMOUNT[1]);
+    printf("data_block_0 size = %lu  data_block_1 size = %lu\n", DATABLOCKSIZE[0], DATABLOCKSIZE[1]);
+    printf("padding_block_0 size = %lu  padding_block_1 size = %lu\n", PADDINGSIZE[0], PADDINGSIZE[1]);
+    printf("data_block_0 amount = %lu  data_block_1 amount = %lu\n", DATABLOCKAMOUNT[0], DATABLOCKAMOUNT[1]);
 
     // get dataBlockAmountPerReading and storageSizePerReading
     dataBlockAmountPerReading = DATABLOCKAMOUNT[0] + DATABLOCKAMOUNT[1];
     storageSizePerReading = (DATABLOCKSIZE[0] + PADDINGSIZE[0]) * DATABLOCKAMOUNT[0] + (DATABLOCKSIZE[1] + PADDINGSIZE[1]) * DATABLOCKAMOUNT[1];
     printf("data block amount: %lu\n", dataBlockAmountPerReading);
     printf("storageSizePerReading = %lu\n", storageSizePerReading);
-    printf("storageSizePerReading / 64 = %lu\n", storageSizePerReading / 64);
 
     // set up thread config 1
-    uint64_t blockDimension_1[3] = {32llu, 4llu, 1llu};
+    uint64_t blockDimension_1[3] = {argv_2, 1llu, 1llu};
     uint64_t gridDimension_1[3] = {1llu, 1llu, 1llu};
     uint64_t threads = dataBlockAmountPerReading;
     threadConfig(threads, blockDimension_1, gridDimension_1);
     dim3 block_1(blockDimension_1[0], blockDimension_1[1], blockDimension_1[2]);
     dim3 grid_1(gridDimension_1[0], gridDimension_1[1], gridDimension_1[2]);
-    printf("block dimension 1: %lu, %lu, %lu\n", blockDimension_1[0], blockDimension_1[1], blockDimension_1[2]);
-    printf("grid dimension 1: %lu, %lu, %lu\n",  gridDimension_1[0],  gridDimension_1[1],  gridDimension_1[2]);
+    printf("threads of thread config 1 = %lu\n", threads);
+    printf("block_dimension_1: %lu, %lu, %lu\n", blockDimension_1[0], blockDimension_1[1], blockDimension_1[2]);
+    printf("grid_dimension_1: %lu, %lu, %lu\n",  gridDimension_1[0],  gridDimension_1[1],  gridDimension_1[2]);
 
     // set up thread config 2
-    uint64_t blockDimension_2[3] = {128llu, 1llu, 1llu};
+    uint64_t blockDimension_2[3] = {argv_3, 1llu, 1llu};
     uint64_t gridDimension_2[3] = {1llu, 1llu, 1llu};
-    uint64_t groupsPerThread_1 = 2500;
+    uint64_t groupsPerThread_1 = argv_4;
     uint64_t groupsPerThread_2 = 0;
     threads = storageSizePerReading / (64 * groupsPerThread_1); 
-    if  (storageSizePerReading % (64 * groupsPerThread_1) > 0) 
+    if  (storageSizePerReading > 64 * groupsPerThread_1) 
     {
-        threads++;
         groupsPerThread_2 = (storageSizePerReading % (64 * groupsPerThread_1)) / 64;
     }
-    printf("group_1 = %llu, group_2 = %llu\n", groupsPerThread_1, groupsPerThread_2);
+    else
+    {
+        printf("Don't correctly set up thread config 2\n ");
+        exit(-1);
+    }
+    if (groupsPerThread_2 > 0) ++threads;
     threadConfig(threads, blockDimension_2, gridDimension_2);
     dim3 block_2(blockDimension_2[0], blockDimension_2[1], blockDimension_2[2]);
     dim3 grid_2(gridDimension_2[0], gridDimension_2[1], gridDimension_2[2]);
+    printf("group_1 = %llu, group_2 = %llu\n", groupsPerThread_1, groupsPerThread_2);
+    printf("threads of thread config 2 = %lu\n", threads);
     printf("block dimension 2: %lu, %lu, %lu\n", blockDimension_2[0], blockDimension_2[1], blockDimension_2[2]);
     printf("grid dimension 2: %lu, %lu, %lu\n", gridDimension_2[0], gridDimension_2[1], gridDimension_2[2]);
 
@@ -309,6 +320,14 @@ int main(int agrc, char *argv[])
         cudaDeviceSynchronize();
         cudaFree(D_E);
         hashValuePosition += (dataBlockAmountPerReading * 8);
+
+        // check kernel lauch fail
+        cudaError_t cudaStatus = cudaGetLastError();
+        if (cudaStatus != cudaSuccess)
+        {
+            fprintf(stderr, "Kernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
+            exit(-1);
+        }
     }
 
     // transform little end to big end
@@ -321,7 +340,6 @@ int main(int agrc, char *argv[])
 
     // recording phase 1 time
     phase_1 = getTime();
-    printf("Phase 1: %f\n", phase_1 - start);
 
 // *********************************************************************************
 // ****************** Computing 2 ~ (layers - 1) layer hash value ******************
